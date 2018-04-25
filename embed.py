@@ -48,6 +48,7 @@ def ranking(types, model, distfn):
 def control(queue, log, types, data, fout, distfn, nepochs, processes):
     min_rank = (np.Inf, -1)
     max_map = (0, -1)
+    times = 1
     while True:
         gc.collect()
         msg = queue.get()
@@ -57,6 +58,7 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
             break
         else:
             epoch, elapsed, loss, model = msg
+            times += 1
         if model is not None:
             # save model to fout
             th.save({
@@ -64,23 +66,24 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
                 'epoch': epoch,
                 'objects': data.objects,
             }, fout + str(epoch))
-            # compute embedding quality
-            mrank, mAP = ranking(types, model, distfn)
-            if mrank < min_rank[0]:
-                min_rank = (mrank, epoch)
-            if mAP > max_map[0]:
-                max_map = (mAP, epoch)
-            log.info(
-                ('eval: {'
-                 '"epoch": %d, '
-                 '"elapsed": %.2f, '
-                 '"loss": %.3f, '
-                 '"mean_rank": %.2f, '
-                 '"mAP": %.4f, '
-                 '"best_rank": %.2f, '
-                 '"best_mAP": %.4f}') % (
-                     epoch, elapsed, loss, mrank, mAP, min_rank[0], max_map[0])
-            )
+            if times % 30 == 0:
+                # compute embedding quality
+                mrank, mAP = ranking(types, model, distfn)
+                if mrank < min_rank[0]:
+                    min_rank = (mrank, epoch)
+                if mAP > max_map[0]:
+                    max_map = (mAP, epoch)
+                log.info(
+                    ('eval: {'
+                     '"epoch": %d, '
+                     '"elapsed": %.2f, '
+                     '"loss": %.3f, '
+                     '"mean_rank": %.2f, '
+                     '"mAP": %.4f, '
+                     '"best_rank": %.2f, '
+                     '"best_mAP": %.4f}') % (
+                         epoch, elapsed, loss, mrank, mAP, min_rank[0], max_map[0])
+                )
         else:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}}}')
         if epoch >= nepochs - 1:
