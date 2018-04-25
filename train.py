@@ -32,7 +32,10 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
         collate_fn=data.collate
     )
 
+    log.info(f'Start rank {rank}')
+
     for epoch in range(opt.epochs):
+        log.info(f'epoch {epoch}')
         epoch_loss = []
         loss = None
         data.burnin = False
@@ -43,7 +46,13 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
             lr = opt.lr * _lr_multiplier
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
+        i = 0
         for inputs, targets in loader:
+            if i == 0:
+                print(f'Start')
+            if rank == 1 and i % 1000 == 0:
+                log.info(f'    - inputs: {i}')
+            i += 1
             elapsed = timeit.default_timer() - t_start
             optimizer.zero_grad()
             preds = model(inputs)
