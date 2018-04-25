@@ -63,7 +63,7 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
                 'model': model.state_dict(),
                 'epoch': epoch,
                 'objects': data.objects,
-            }, fout)
+            }, fout + str(epoch))
             # compute embedding quality
             mrank, mAP = ranking(types, model, distfn)
             if mrank < min_rank[0]:
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('-negs', help='Number of negatives', type=int, default=20)
     parser.add_argument('-nproc', help='Number of processes', type=int, default=5)
     parser.add_argument('-ndproc', help='Number of data loading processes', type=int, default=2)
-    parser.add_argument('-eval_each', help='Run evaluation each n-th epoch', type=int, default=10)
+    parser.add_argument('-eval_each', help='Run evaluation each n-th epoch', type=int, default=2)
     parser.add_argument('-burnin', help='Duration of burn in', type=int, default=20)
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     opt = parser.parse_args()

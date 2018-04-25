@@ -49,7 +49,7 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
         i = 0
         for inputs, targets in loader:
             if i == 0:
-                print(f'Start')
+                print('Start')
             if rank == 1 and i % 1000 == 0:
                 log.info(f'    - inputs: {i}')
             i += 1
