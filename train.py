@@ -11,7 +11,9 @@ import timeit
 from torch.utils.data import DataLoader
 import gc
 
-_lr_multiplier = 0.01
+# if mammals, 0.1. 
+# all nouns, 0.01
+_lr_multiplier = 0.1
 
 
 def train_mp(model, data, optimizer, opt, log, rank, queue):
@@ -43,7 +45,9 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
             lr = opt.lr * _lr_multiplier
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
-        for inputs, targets in loader:
+        for i, (inputs, targets) in enumerate(loader):
+            if rank == 1 and i % 1000 == 0:
+                log.info(f'\r    - {i}')
             elapsed = timeit.default_timer() - t_start
             optimizer.zero_grad()
             preds = model(inputs)

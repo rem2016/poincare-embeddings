@@ -7,6 +7,7 @@
 #
 import torch as th
 import numpy as np
+import time
 import logging
 import argparse
 from torch.autograd import Variable
@@ -59,13 +60,18 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
             epoch, elapsed, loss, model = msg
         if model is not None:
             # save model to fout
+            _fout = f'{fout}.{epoch}.nth'
+            log.info(f'Saving model f{_fout}')
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,
                 'objects': data.objects,
-            }, fout)
+            }, _fout)
             # compute embedding quality
+            log.info('Computing ranking')
+            _start_time = time.time()
             mrank, mAP = ranking(types, model, distfn)
+            log.info(f'Computing finished. Used time: {time.time() - _start_time}')
             if mrank < min_rank[0]:
                 min_rank = (mrank, epoch)
             if mAP > max_map[0]:
@@ -120,7 +126,7 @@ if __name__ == '__main__':
         log_level = logging.INFO
     log = logging.getLogger('poincare-nips17')
     logging.basicConfig(level=log_level, format='%(message)s', stream=sys.stdout)
-    idx, objects = slurp(opt.dset)
+    idx, objects = slurp(opt.dset, symmetrize=True)
 
     # create adjacency list for evaluation
     adjacency = ddict(set)

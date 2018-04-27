@@ -141,13 +141,15 @@ class GraphDataset(Dataset):
 
         self._weights = ddict(lambda: ddict(int))
         self._counts = np.ones(len(objects), dtype=np.float)
+        nents = 0
         for i in range(idx.size(0)):
             t, h, w = self.idx[i]
             self._counts[h] += w
             self._weights[t][h] += w
+            nents = max((nents, t, h))
         self._weights = dict(self._weights)
-        nents = int(np.array(list(self._weights.keys())).max() + 1)
-        assert len(objects) == nents, 'Number of objects do no match'
+        nents += 1
+        assert len(objects) == nents, f'Number of objects do no match {len(objects)} != {nents}'
 
         if unigram_size > 0:
             c = self._counts ** self._dampening
