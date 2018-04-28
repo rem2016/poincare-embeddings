@@ -10,6 +10,9 @@ from itertools import count
 from collections import defaultdict as ddict
 import numpy as np
 import torch as th
+import os
+import argparse
+import random
 
 
 def parse_seperator(line, length, sep='\t'):
@@ -67,3 +70,51 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False):
     objects = intmap_to_list(dict(enames))
     print(f'slurp: objects={len(objects)}, edges={len(idx)}')
     return idx, objects
+
+
+# randomly hold out links
+def _get_root_and_leaf(idx):
+    as_head = set()
+    as_tail = set()
+    max_ = 0
+    for row in idx:
+        h, t, _ = row
+        as_head.add(int(h))
+        as_tail.add(int(t))
+        max_ = max(max_, h, t)
+        
+    u = set(range(max_))
+    root_and_leaf = (u - as_head) | (u - as_tail)
+    return root_and_leaf
+
+
+def split_data(fin, fout, max_test_rate=0.3):
+    idx, objs = slurp(fin)
+    root_and_leaf = _get_root_and_leaf(idx)
+    train, test = [], []
+    max_test_size = int(len(idx) * max_test_rate + 0.5)
+    random.shuffle(idx)
+    for h, t, _ in idx:
+        t = int(t)
+        h = int(h)
+        if t not in root_and_leaf and h not in root_and_leaf and len(test) < max_test_size:
+            test.append((objs[h], objs[t]))
+        else:
+            train.append((objs[h], objs[t]))
+
+    with open(f'{fout}.train.tsv', 'w') as f:
+        f.write('\n'.join(['\t'.join(x) for x in train]))
+    with open(f'{fout}.test.tsv', 'w') as f:
+        f.write('\n'.join(['\t'.join(x) for x in test]))
+            
+    return train, test
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Split Data')
+    parser.add_argument('-input', help='Input data path', type=str, required=True)
+    parser.add_argument('-output', help='Output data path', type=str, required=True)
+    opt = parser.parse_args()
+    split_data(opt.input, opt.output)
+    
+    
