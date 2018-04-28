@@ -102,6 +102,30 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
             break
 
 
+def setup_log(opt):
+    if opt.debug:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    log_file = f'{opt.fout}.log'
+    log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s ((%(lineno)d)) %(massage)s',
+                                      datefmt='%H:%M:%S')
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(log_formatter)
+    file_handler.setLevel(log_level)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(log_formatter)
+    stream_handler.setLevel(log_level)
+
+    log = logging.getLogger('poincare-nips17')
+    log.setLevel(log_level)
+
+    log.addHandler(file_handler)
+    log.addHandler(stream_handler)
+    return log
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Poincare Embeddings')
     parser.add_argument('-dim', help='Embedding dimension', type=int)
@@ -117,16 +141,15 @@ if __name__ == '__main__':
     parser.add_argument('-eval_each', help='Run evaluation each n-th epoch', type=int, default=10)
     parser.add_argument('-burnin', help='Duration of burn in', type=int, default=20)
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
+    parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
     opt = parser.parse_args()
+    if opt.symmetrize:
+        opt.fout += '_sym'
 
     th.set_default_tensor_type('torch.FloatTensor')
-    if opt.debug:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-    log = logging.getLogger('poincare-nips17')
-    logging.basicConfig(level=log_level, format='%(message)s', stream=sys.stdout)
-    idx, objects = slurp(opt.dset, symmetrize=True)
+
+    log = setup_log(opt)
+    idx, objects = slurp(opt.dset, symmetrize=opt.symmetrize)
 
     # create adjacency list for evaluation
     adjacency = ddict(set)
@@ -159,6 +182,8 @@ if __name__ == '__main__':
         ('lr', '{:g}'),
         ('batchsize', '{:d}'),
         ('negs', '{:d}'),
+        ('burnin', '{:d}'),
+        ('eval_each', '{:d}'),
     ] + conf
     conf = ', '.join(['"{}": {}'.format(k, f).format(getattr(opt, k)) for k, f in conf])
     log.info(f'json_conf: {{{conf}}}')
