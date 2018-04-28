@@ -8,8 +8,10 @@
 
 import numpy as np
 from numpy.random import choice, randint
+from word_vec_loader import WordVectorLoader
 import torch as th
 from torch import nn
+from numpy.linalg import norm
 from torch.autograd import Function, Variable
 from torch.utils.data import Dataset
 from collections import defaultdict as ddict
@@ -110,6 +112,9 @@ class Embedding(nn.Module):
     def embedding(self):
         return list(self.lt.parameters())[0].data.cpu().numpy()
 
+    def embed(self, inputs):
+        return self.lt(inputs)
+
 
 class SNEmbedding(Embedding):
     def __init__(self, size, dim, dist=PoincareDistance, max_norm=1):
@@ -207,3 +212,36 @@ class SNGraphDataset(GraphDataset):
         )
         data.objects = objects
         return model, data, model_name, conf
+
+    @classmethod
+    def initialize_word2vec_nn(cls, distfn, opt, idx, objects):
+        import join_word2vec
+        conf = []
+        model_name = cls.model_name % (opt.dset, opt.distfn, opt.dim)
+        data = cls(idx, objects, opt.negs)
+        model = join_word2vec.SNEmbeddingWithWord(
+            len(data.objects),
+            opt.dim,
+            sense_num=len(objects),
+            hidden_size=opt.nn_hidden_size,
+            layer_size=opt.nn_hidden_layer
+        )
+        data.objects = objects
+        return model, data, model_name, conf
+
+
+class WordsDataset(Dataset):
+    def __init__(self, pair_per_word=10):
+        self.npair = pair_per_word
+        self.words = WordVectorLoader
+        self.word_num = len(self.words.word2index)
+
+    def __getitem__(self, index):
+        a_index = index // self.npair
+        b_index = randint(0, self.word_num)
+        a = self.words.get_vec_by_index(a_index)
+        b = self.words.get_vec_by_index(b_index)
+        return th.LongTensor([a, b]).view(1, 2), th.FloatTensor(np.sum(a * b) / (norm(a) * norm(b)))
+
+    def __len__(self):
+        return self.word_num * self.npair

@@ -15,6 +15,7 @@ from torch.autograd import Variable
 from collections import defaultdict as ddict
 import torch.multiprocessing as mp
 import model, train, rsgd
+import join_word2vec
 from data import slurp
 from rsgd import RiemannianSGD
 from sklearn.metrics import average_precision_score
@@ -109,7 +110,7 @@ def setup_log(opt):
     else:
         log_level = logging.INFO
     log_file = f'{opt.fout}/log.log'
-    log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s ((%(lineno)d)) %(message)s',
+    log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s (%(lineno)d) %(message)s',
                                       datefmt='%H:%M:%S')
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(log_formatter)
@@ -128,6 +129,8 @@ def setup_log(opt):
 
 
 def set_up_output_file_name(opt):
+    if opt.w2v_nn:
+        opt.fout += '_w2vnn'
     if opt.symmetrize:
         opt.fout += '_sym'
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
@@ -153,13 +156,16 @@ if __name__ == '__main__':
     parser.add_argument('-burnin', help='Duration of burn in', type=int, default=20)
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
+    parser.add_argument('-w2v_nn', help='Use word2vec NN to map', action='store_true', default=False)
+    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=2)
+    parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=200)
     opt = parser.parse_args()
 
     set_up_output_file_name(opt)
     th.set_default_tensor_type('torch.FloatTensor')
     log = setup_log(opt)
 
-    idx, objects = slurp(opt.dset, symmetrize=opt.symmetrize)
+    idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize, load_word=opt.w2v_nn)
 
     # create adjacency list for evaluation
     test_idx = idx
@@ -186,7 +192,10 @@ if __name__ == '__main__':
         raise ValueError(f'Unknown distance function {opt.distfn}')
 
     # initialize model and data
-    model, data, model_name, conf = model.SNGraphDataset.initialize(distfn, opt, idx, objects)
+    if opt.w2v_nn:
+        model, data, model_name, conf = model.SNGraphDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
+    else:
+        model, data, model_name, conf = model.SNGraphDataset.initialize(distfn, opt, idx, objects)
 
     # Build config string for log
     conf = [
@@ -217,6 +226,8 @@ if __name__ == '__main__':
         model.share_memory()
         processes = []
         for rank in range(opt.nproc):
+            # TODO create corresponding data loader
+            # TODO use join_word2vec.train to train
             p = mp.Process(
                 target=train.train_mp,
                 args=(model, data, optimizer, opt, log, rank + 1, queue)

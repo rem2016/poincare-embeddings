@@ -8,9 +8,10 @@
 
 from itertools import count
 from collections import defaultdict as ddict
+from nltk.corpus import wordnet as wn
 import numpy as np
+from word_vec_loader import WordVectorLoader
 import torch as th
-import os
 import argparse
 import random
 
@@ -53,7 +54,31 @@ def intmap_to_list(d):
     return arr
 
 
-def slurp(fin, fparse=parse_tsv, symmetrize=False):
+def load_all_related_words(idx, objects, enames):
+    """
+
+    :param idx: edges
+    :param objects: index => name
+    :param enames: name => index
+    :return: word => index
+    """
+    ecount = count(len(objects))
+    dwords = ddict(ecount.__next__)
+    print('Loading wordnet words')
+    for synset, index in enames.items():
+        synset = wn.synset(synset)
+        for lemma in synset.lemmas():
+            name = lemma.name()
+            if '_' in name:
+                continue
+
+            idx.append((dwords[name], index, 1))
+
+    print(f'Total {len(dwords)} words are added')
+    return dwords
+
+
+def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
     ecount = count()
     enames = ddict(ecount.__next__)
 
@@ -64,12 +89,16 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False):
         subs.append((enames[i], enames[j], w))
         if symmetrize:
             subs.append((enames[j], enames[i], w))
-    idx = th.from_numpy(np.array(subs, dtype=np.int))
 
     # freeze defaultdicts after training data and convert to arrays
     objects = intmap_to_list(dict(enames))
-    print(f'slurp: objects={len(objects)}, edges={len(idx)}')
-    return idx, objects
+    dwords = None
+    if load_word:
+        dwords = load_all_related_words(subs, objects, enames)
+        WordVectorLoader.build(dwords)
+    idx = th.from_numpy(np.array(subs, dtype=np.int))
+    print(f'slurp: objects={len(objects)}, edges={len(idx)}' + f', words={len(dwords)}' if load_word else '')
+    return idx, objects, dwords
 
 
 # randomly hold out links
@@ -116,5 +145,3 @@ if __name__ == '__main__':
     parser.add_argument('-output', help='Output data path', type=str, required=True)
     opt = parser.parse_args()
     split_data(opt.input, opt.output)
-    
-    
