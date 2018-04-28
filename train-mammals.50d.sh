@@ -2,7 +2,7 @@
 
 # Get number of threads from environment or set to default
 if [ -z "$NTHREADS" ]; then
-   NTHREADS=5
+   NTHREADS=1
 fi
 
 echo "Using $NTHREADS threads"
@@ -15,14 +15,15 @@ export OMP_NUM_THREADS=1
 # For MAP results, replace the learning rate parameter with -lr 2.0
 
 python3 embed.py \
-       -dim 10 \
+       -dim 50 \
        -lr 1.0 \
        -epochs 200 \
-       -negs 50 \
+       -negs 10 \
        -burnin 10 \
        -nproc "${NTHREADS}" \
        -distfn poincare \
        -dset wordnet/mammal_closure.tsv \
-       -fout mammals \
+       -fout model/mammals.50d \
        -batchsize 50 \
        -eval_each 20 \
+       -symmetrize
