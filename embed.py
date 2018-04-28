@@ -6,6 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 #
 import torch as th
+import os
 import numpy as np
 import time
 import logging
@@ -60,7 +61,7 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
             epoch, elapsed, loss, model = msg
         if model is not None:
             # save model to fout
-            _fout = f'{fout}.{epoch}.nth'
+            _fout = f'{fout}/{epoch}.nth'
             log.info(f'Saving model f{_fout}')
             th.save({
                 'model': model.state_dict(),
@@ -107,7 +108,7 @@ def setup_log(opt):
         log_level = logging.DEBUG
     else:
         log_level = logging.INFO
-    log_file = f'{opt.fout}.log'
+    log_file = f'{opt.fout}/log.log'
     log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s ((%(lineno)d)) %(message)s',
                                       datefmt='%H:%M:%S')
     file_handler = logging.FileHandler(log_file)
@@ -130,6 +131,9 @@ def set_up_output_file_name(opt):
     if opt.symmetrize:
         opt.fout += '_sym'
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
+    if os.path.exists(opt.fout):
+        raise EnvironmentError('There is already a output file called ' + opt.fout)
+    os.makedirs(opt.fout)
 
 
 if __name__ == '__main__':
@@ -150,7 +154,6 @@ if __name__ == '__main__':
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
     opt = parser.parse_args()
-
 
     set_up_output_file_name(opt)
     th.set_default_tensor_type('torch.FloatTensor')
