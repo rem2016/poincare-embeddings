@@ -108,7 +108,7 @@ def setup_log(opt):
     else:
         log_level = logging.INFO
     log_file = f'{opt.fout}.log'
-    log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s ((%(lineno)d)) %(massage)s',
+    log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s ((%(lineno)d)) %(message)s',
                                       datefmt='%H:%M:%S')
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(log_formatter)
