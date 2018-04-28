@@ -30,6 +30,7 @@ def from_pretrained(embeddings, freeze=True):
     return embedding
 
 
+#TODO Do not use static methods
 class WordVectorLoader:
     word2index = None
     index2word = None

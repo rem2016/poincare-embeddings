@@ -6,6 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 #
 import torch as th
+from model import WordsDataset
 import os
 import numpy as np
 import time
@@ -159,6 +160,7 @@ if __name__ == '__main__':
     parser.add_argument('-w2v_nn', help='Use word2vec NN to map', action='store_true', default=False)
     parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=2)
     parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=200)
+    parser.add_argument('-w2v_sim', help='Use word2vec sim to map', action='store_true', default=False)
     opt = parser.parse_args()
 
     set_up_output_file_name(opt)
@@ -226,12 +228,17 @@ if __name__ == '__main__':
         model.share_memory()
         processes = []
         for rank in range(opt.nproc):
-            # TODO create corresponding data loader
-            # TODO use join_word2vec.train to train
-            p = mp.Process(
-                target=train.train_mp,
-                args=(model, data, optimizer, opt, log, rank + 1, queue)
-            )
+            if opt.w2v_sim:
+                word_data = WordsDataset()
+                p = mp.Process(
+                    target=join_word2vec.train,
+                    args=(model, data, word_data, optimizer, opt, log, rank + 1, queue)
+                )
+            else:
+                p = mp.Process(
+                    target=train.train_mp,
+                    args=(model, data, optimizer, opt, log, rank + 1, queue)
+                )
             p.start()
             processes.append(p)
 
