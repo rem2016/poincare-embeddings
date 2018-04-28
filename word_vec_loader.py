@@ -48,7 +48,7 @@ class WordVectorLoader:
         index2word = [None] * len(dwords)
         for word, i in dwords.items():
             i -= cls.sense_num
-            word_vec[i] = nlp(word).vector
+            word_vec[i] = nlp(word).vector.tolist()
             index2word[i] = word
 
         assert all((x is not None for x in word_vec))
