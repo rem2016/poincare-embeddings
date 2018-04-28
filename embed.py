@@ -126,10 +126,17 @@ def setup_log(opt):
     return log
 
 
+def set_up_output_file_name(opt):
+    if opt.symmetrize:
+        opt.fout += '_sym'
+    opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Poincare Embeddings')
     parser.add_argument('-dim', help='Embedding dimension', type=int)
     parser.add_argument('-dset', help='Dataset to embed', type=str)
+    parser.add_argument('-dset_test', help='Dataset to test', type=str, default='')
     parser.add_argument('-fout', help='Filename where to store model', type=str)
     parser.add_argument('-distfn', help='Distance function', type=str)
     parser.add_argument('-lr', help='Learning rate', type=float)
@@ -143,18 +150,21 @@ if __name__ == '__main__':
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
     opt = parser.parse_args()
-    if opt.symmetrize:
-        opt.fout += '_sym'
 
+
+    set_up_output_file_name(opt)
     th.set_default_tensor_type('torch.FloatTensor')
-
     log = setup_log(opt)
+
     idx, objects = slurp(opt.dset, symmetrize=opt.symmetrize)
 
     # create adjacency list for evaluation
+    test_idx = idx
+    if opt.dset_test != '':
+        test_idx, test_objects = slurp(opt.dset_test, symmetrize=False)
     adjacency = ddict(set)
-    for i in range(len(idx)):
-        s, o, _ = idx[i]
+    for i in range(len(test_idx)):
+        s, o, _ = test_idx[i]
         adjacency[s].add(o)
     adjacency = dict(adjacency)
 

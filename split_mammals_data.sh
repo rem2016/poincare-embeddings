@@ -1,0 +1,1 @@
+python data.py -input wordnet/mammal_closure.tsv -output wordnet/mammal_closure
