@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 import gc
 
 
-_lr_multiplier = 0.1
+_lr_multiplier = 0.01
 
 
 def train_mp(model, data, optimizer, opt, log, rank, queue):
