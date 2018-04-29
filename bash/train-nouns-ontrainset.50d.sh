@@ -2,7 +2,7 @@
 
 # Get number of threads from environment or set to default
 if [ -z "$NTHREADS" ]; then
-   NTHREADS=1
+   NTHREADS=5
 fi
 
 echo "Using $NTHREADS threads"
