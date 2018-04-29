@@ -51,7 +51,7 @@ def ranking(types, model, distfn):
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def control(queue, log, types, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
+def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
     min_rank = (np.Inf, -1)
     max_map = (0, -1)
     while True:
@@ -73,26 +73,35 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes, w2v_nn, w
                 'objects': data.objects,
             }, _fout)
 
+            # TODO if any error occurs here, refactor
             # compute embedding quality
             log.info('Computing ranking')
             _start_time = time.time()
-            mrank, mAP = ranking(types, model, distfn)
+            train_mrank, train_mAP = ranking(train_adj, model, distfn)
+            mrank, mAP = train_mrank, train_mAP
             log.info(f'Computing finished. Used time: {time.time() - _start_time}')
+            test_info = ''
+            if test_adj is not None:
+                test_mrank, test_mAP = ranking(test_adj, model, distfn)
+                mrank, mAP = test_mrank, test_mAP
+                test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}'
+
             if mrank < min_rank[0]:
-                min_rank = (mrank, epoch)
+                min_rank = (train_mrank, epoch)
             if mAP > max_map[0]:
-                max_map = (mAP, epoch)
+                max_map = (train_mAP, epoch)
+
             log.info(
                 ('eval: {'
                  '"epoch": %d, '
                  '"elapsed": %.2f, '
                  '"loss": %.3f, '
                  '"word_sim_loss": %.3f, '
-                 '"mean_rank": %.2f, '
-                 '"mAP": %.4f, '
+                 '"train_mean_rank": %.2f, '
+                 '"train_mAP": %.4f, '
                  '"best_rank": %.2f, '
-                 '"best_mAP": %.4f}') % (
-                     epoch, elapsed, loss, word_sim_loss, mrank, mAP, min_rank[0], max_map[0])
+                 '"best_mAP": %.4f%s}') % (
+                     epoch, elapsed, loss, word_sim_loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
             )
         else:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, '
@@ -160,6 +169,15 @@ def set_up_output_file_name(opt):
     os.makedirs(opt.fout)
 
 
+def get_adjacency_by_idx(_idx):
+    _adjacency = ddict(set)
+    for i in range(len(_idx)):
+        s, o, _ = _idx[i]
+        _adjacency[s].add(o)
+    _adjacency = dict(_adjacency)
+    return _adjacency
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Poincare Embeddings')
     parser.add_argument('-dim', help='Embedding dimension', type=int)
@@ -195,14 +213,11 @@ if __name__ == '__main__':
     idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize, load_word=opt.w2v_nn or opt.w2v_sim)
 
     # create adjacency list for evaluation
-    test_idx = idx
+    test_adjacency = None
+    train_adjacency = get_adjacency_by_idx(idx)
     if opt.dset_test != '':
-        test_idx, test_objects = slurp(opt.dset_test, symmetrize=False)
-    adjacency = ddict(set)
-    for i in range(len(test_idx)):
-        s, o, _ = test_idx[i]
-        adjacency[s].add(o)
-    adjacency = dict(adjacency)
+        test_idx, test_objects = slurp(opt.dset_test, symmetrize=opt.symmetrize, load_word=opt.w2v_nn or opt.w2v_sim)
+        test_adjacency = get_adjacency_by_idx(test_idx)
 
     # setup Riemannian gradients for distances
     opt.retraction = rsgd.euclidean_retraction
@@ -246,7 +261,7 @@ if __name__ == '__main__':
     )
 
     if opt.nproc == 0:
-        handler = train.SingleThreadHandler(log, adjacency, data, opt.fout, distfn, ranking)
+        handler = train.SingleThreadHandler(log, train_adjacency, test_adjacency, data, opt.fout, distfn, ranking)
         if opt.w2v_sim:
             train.single_thread_train(model, data, optimizer, opt, log,
                                       handler, words_data=WordsDataset(WordVectorLoader.word_vec))
@@ -273,7 +288,7 @@ if __name__ == '__main__':
 
         ctrl = mp.Process(
             target=control,
-            args=(queue, log, adjacency, data, opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
+            args=(queue, log, train_adjacency, test_adjacency, data, opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
         )
         ctrl.start()
         ctrl.join()

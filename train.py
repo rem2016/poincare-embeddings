@@ -77,9 +77,9 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
 
 class SingleThreadHandler:
 
-    def __init__(self, log, types, data, fout, distfn, ranking):
+    def __init__(self, log, train_types, test_types, data, fout, distfn, ranking):
         self.log = log
-        self.types = types
+        self.types = train_types
         self.data = data
         self.fout = fout
         self.distfn = distfn
