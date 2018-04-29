@@ -87,9 +87,9 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                 test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
 
             if mrank < min_rank[0]:
-                min_rank = (train_mrank, epoch)
+                min_rank = (mrank, epoch)
             if mAP > max_map[0]:
-                max_map = (train_mAP, epoch)
+                max_map = (mAP, epoch)
 
             log.info(
                 ('eval: {'
