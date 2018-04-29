@@ -19,21 +19,30 @@ import torch.multiprocessing as mp
 import model, train, rsgd
 import join_word2vec
 from data import slurp
+import random
 from rsgd import RiemannianSGD
 from sklearn.metrics import average_precision_score
 import gc
 import sys
 
 
-def ranking(types, model, distfn):
+def random_sample(adj, num):
+    if len(adj) <= num:
+        return adj.items()
+    _data = [(i, j) for i, j in adj.items()]
+    return random.sample(_data, num)
+
+
+def ranking(types, _model, distfn):
+    MAX_NODE_NUM = 5000  # avoid too large set (need more than 3 hour for whole noun set)
     with th.no_grad():
-        lt = th.from_numpy(model.embedding())
+        lt = th.from_numpy(_model.embedding())
         embedding = Variable(lt, volatile=True)
         ranks = []
         ap_scores = []
-        for s, s_types in types.items():
+        for s, s_types in random_sample(types, MAX_NODE_NUM):
             s_e = Variable(lt[s].expand_as(embedding), volatile=True)
-            _dists = model.dist()(s_e, embedding).data.cpu().numpy().flatten()
+            _dists = _model.dist()(s_e, embedding).data.cpu().numpy().flatten()
             _dists[s] = 1e+12
             _labels = np.zeros(embedding.size(0))
             _dists_masked = _dists.copy()
