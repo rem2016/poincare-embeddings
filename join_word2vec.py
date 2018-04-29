@@ -125,7 +125,7 @@ def calc_pair_sim(pairs):
     return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
 
 
-def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
+def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
     # setup parallel data loader
     loader = DataLoader(
         data,
@@ -162,7 +162,7 @@ def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
             loss = model.loss(preds, targets, size_average=True)
             loss.backward()
             optimizer.step(lr=lr)
-            epoch_loss.append(loss.data[0])
+            epoch_loss.append(loss.data.item())
 
         for inputs, targets in words_loader:
             elapsed = timeit.default_timer() - t_start
@@ -171,7 +171,7 @@ def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
             loss = nn.MSELoss()(dists, targets)
             loss.backward()
             optimizer.step(lr=lr)
-            epoch_words_loss.append(loss.data[0])
+            epoch_words_loss.append(loss.data.item())
 
         if rank == 1:
             word_sim_loss = np.mean(epoch_words_loss) if len(epoch_words_loss) else None

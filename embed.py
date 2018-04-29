@@ -295,7 +295,7 @@ if __name__ == '__main__':
             if opt.w2v_sim:
                 word_data = WordsDataset(WordVectorLoader.word_vec)
                 p = mp.Process(
-                    target=join_word2vec.train,
+                    target=join_word2vec.combine_w2v_sim_train,
                     args=(model, data, word_data, optimizer, opt, log, rank + 1, queue)
                 )
             else:
