@@ -95,7 +95,8 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes, w2v_nn, w
                      epoch, elapsed, loss, word_sim_loss, mrank, mAP, min_rank[0], max_map[0])
             )
         else:
-            log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}}}')
+            log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, '
+                     f'"words_sim_loss": {word_sim_loss}, "elapsed": {elapsed}}}')
         if epoch >= nepochs - 1:
             log.info(
                 ('results: {'
