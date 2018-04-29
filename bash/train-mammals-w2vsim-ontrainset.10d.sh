@@ -23,6 +23,7 @@ python3 embed.py \
        -nproc "${NTHREADS}" \
        -distfn poincare \
        -dset wordnet/mammal_closure.train.tsv \
+       -dset_test wordnet/mammal_closure.test.tsv \
        -fout model/mammals.10d.train \
        -batchsize 50 \
        -eval_each 20 \
