@@ -88,12 +88,12 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             _start_time = time.time()
             train_mrank, train_mAP = ranking(train_adj, model, distfn)
             mrank, mAP = train_mrank, train_mAP
-            log.info(f'Computing finished. Used time: {time.time() - _start_time}')
             test_info = ''
             if test_adj is not None:
                 test_mrank, test_mAP = ranking(test_adj, model, distfn)
                 mrank, mAP = test_mrank, test_mAP
                 test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
+            log.info(f'Computing finished. Used time: {time.time() - _start_time}')
 
             if mrank < min_rank[0]:
                 min_rank = (mrank, epoch)
