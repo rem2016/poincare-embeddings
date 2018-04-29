@@ -102,7 +102,7 @@ def load_all_related_words(idx, objects, enames):
     return dwords, word_vec
 
 
-def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
+def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False, build_word_vector=False):
     ecount = count()
     enames = ddict(ecount.__next__)
 
@@ -119,7 +119,8 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
     dwords = None
     if load_word:
         dwords, word_vec = load_all_related_words(subs, objects, enames)
-        WordVectorLoader.build(dwords, word_vec)
+        if build_word_vector:
+            WordVectorLoader.build(dwords, word_vec)
     idx = np.array(subs, dtype=np.int)
     print(f'slurp: objects={len(objects)}, edges={len(idx)}' + f', words={len(dwords)}' if load_word else '')
     return idx, objects, dwords
@@ -143,7 +144,7 @@ def _get_root_and_leaf(idx):
     return root_and_leaf
 
 
-SELDOM_THRESHOLD = 5
+SELDOM_THRESHOLD = 3
 
 
 def _get_seldom_appear(idx):
@@ -153,13 +154,13 @@ def _get_seldom_appear(idx):
         nodes[h] += 1
         nodes[t] += 1
 
-    return {x for x, c in nodes.items() if c < SELDOM_THRESHOLD}
+    return {x for x, c in nodes.items() if c < SELDOM_THRESHOLD}, dict(nodes)
 
 
 def split_data(fin, fout, max_test_rate=0.05):
     idx, objs, _ = slurp(fin)
     root_and_leaf = _get_root_and_leaf(idx)
-    seldom_appear = _get_seldom_appear(idx)
+    seldom_appear, node_counts = _get_seldom_appear(idx)
     forbidden_node = root_and_leaf | seldom_appear
     train, test = [], []
     max_test_size = int(len(idx) * max_test_rate + 0.5)
@@ -167,7 +168,13 @@ def split_data(fin, fout, max_test_rate=0.05):
     for h, t, _ in idx:
         t = int(t)
         h = int(h)
-        if t not in forbidden_node and h not in forbidden_node and len(test) < max_test_size:
+        if t not in forbidden_node \
+                and h not in forbidden_node \
+                and len(test) < max_test_size \
+                and node_counts[h] >= SELDOM_THRESHOLD \
+                and node_counts[t] >= SELDOM_THRESHOLD:
+            node_counts[h] -= 1
+            node_counts[t] -= 1
             test.append((objs[h], objs[t]))
         else:
             train.append((objs[h], objs[t]))
