@@ -6,6 +6,7 @@ import join_word2vec
 
 def test_join():
     words = ['time', 'dog', 'weather', 'morning']
+    words = {name: i for i, name in enumerate(words)}
     join_word2vec.WordVectorLoader.build(words)
     model = join_word2vec.SNEmbeddingWithWord(3, 5, len(words), )
     print(model(th.tensor([0, 1, 2, 3, 4, 5])))

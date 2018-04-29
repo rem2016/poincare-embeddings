@@ -25,31 +25,32 @@ import sys
 
 
 def ranking(types, model, distfn):
-    lt = th.from_numpy(model.embedding())
-    embedding = Variable(lt, volatile=True)
-    ranks = []
-    ap_scores = []
-    for s, s_types in types.items():
-        s_e = Variable(lt[s].expand_as(embedding), volatile=True)
-        _dists = model.dist()(s_e, embedding).data.cpu().numpy().flatten()
-        _dists[s] = 1e+12
-        _labels = np.zeros(embedding.size(0))
-        _dists_masked = _dists.copy()
-        _ranks = []
-        for o in s_types:
-            _dists_masked[o] = np.Inf
-            _labels[o] = 1
-        ap_scores.append(average_precision_score(_labels, -_dists))
-        for o in s_types:
-            d = _dists_masked.copy()
-            d[o] = _dists[o]
-            r = np.argsort(d)
-            _ranks.append(np.where(r == o)[0][0] + 1)
-        ranks += _ranks
+    with th.no_grad():
+        lt = th.from_numpy(model.embedding())
+        embedding = Variable(lt, volatile=True)
+        ranks = []
+        ap_scores = []
+        for s, s_types in types.items():
+            s_e = Variable(lt[s].expand_as(embedding), volatile=True)
+            _dists = model.dist()(s_e, embedding).data.cpu().numpy().flatten()
+            _dists[s] = 1e+12
+            _labels = np.zeros(embedding.size(0))
+            _dists_masked = _dists.copy()
+            _ranks = []
+            for o in s_types:
+                _dists_masked[o] = np.Inf
+                _labels[o] = 1
+            ap_scores.append(average_precision_score(_labels, -_dists))
+            for o in s_types:
+                d = _dists_masked.copy()
+                d[o] = _dists[o]
+                r = np.argsort(d)
+                _ranks.append(np.where(r == o)[0][0] + 1)
+            ranks += _ranks
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def control(queue, log, types, data, fout, distfn, nepochs, processes):
+def control(queue, log, types, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
     min_rank = (np.Inf, -1)
     max_map = (0, -1)
     while True:
@@ -70,6 +71,7 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes):
                 'epoch': epoch,
                 'objects': data.objects,
             }, _fout)
+
             # compute embedding quality
             log.info('Computing ranking')
             _start_time = time.time()
@@ -136,7 +138,19 @@ def set_up_output_file_name(opt):
         opt.fout += '_sym'
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
     if os.path.exists(opt.fout):
-        raise EnvironmentError('There is already a output file called ' + opt.fout)
+        if opt.override:
+            print("This will rename the original result. Are you sure? [Y/n]")
+            s = input()
+            if s.lower() == 'n':
+                sys.exit(0)
+            else:
+                i = 0
+                while os.path.exists(f'{opt.fout}[{i}]'):
+                    i += 1
+                os.rename(opt.fout, f'{opt.fout}[{i}]')
+        else:
+            raise EnvironmentError('There is already a output file called ' + opt.fout)
+
     os.makedirs(opt.fout)
 
 
@@ -158,14 +172,19 @@ if __name__ == '__main__':
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
     parser.add_argument('-w2v_nn', help='Use word2vec NN to map', action='store_true', default=False)
-    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=2)
-    parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=200)
+    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=1)
+    parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=100)
     parser.add_argument('-w2v_sim', help='Use word2vec sim to map', action='store_true', default=False)
+    parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     opt = parser.parse_args()
 
     set_up_output_file_name(opt)
     th.set_default_tensor_type('torch.FloatTensor')
     log = setup_log(opt)
+    log.info("======================================")
+
+    log.info("Config")
+    log.info(str(opt))
 
     idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize, load_word=opt.w2v_nn)
 
@@ -220,9 +239,9 @@ if __name__ == '__main__':
         lr=opt.lr,
     )
 
-    # if nproc == 0, run single threaded, otherwise run Hogwild
     if opt.nproc == 0:
-        train.train(model, data, optimizer, opt, log, 0)
+        handler = train.SingleThreadHandler(log, adjacency, data, opt.fout, distfn, ranking)
+        train.single_thread_train(model, data, optimizer, opt, log, handler)
     else:
         queue = mp.Manager().Queue()
         model.share_memory()
@@ -244,7 +263,7 @@ if __name__ == '__main__':
 
         ctrl = mp.Process(
             target=control,
-            args=(queue, log, adjacency, data, opt.fout, distfn, opt.epochs, processes)
+            args=(queue, log, adjacency, data, opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
         )
         ctrl.start()
         ctrl.join()

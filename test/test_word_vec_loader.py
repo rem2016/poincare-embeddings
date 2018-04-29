@@ -6,6 +6,7 @@ from join_word2vec import WordVectorLoader
 
 def test_word2vec():
     words = ['people', 'child', 'fish', 'swim', 'dance']
+    words = {name: i for i, name in enumerate(words)}
     WordVectorLoader.build(words)
     v = WordVectorLoader.get_vec_by_word('child')
     assert isinstance(list(v), list)

@@ -96,7 +96,7 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
     if load_word:
         dwords = load_all_related_words(subs, objects, enames)
         WordVectorLoader.build(dwords)
-    idx = th.from_numpy(np.array(subs, dtype=np.int))
+    idx = np.array(subs, dtype=np.int)
     print(f'slurp: objects={len(objects)}, edges={len(idx)}' + f', words={len(dwords)}' if load_word else '')
     return idx, objects, dwords
 

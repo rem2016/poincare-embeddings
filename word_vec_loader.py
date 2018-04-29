@@ -1,31 +1,16 @@
 import spacy
+import numpy as np
 from torch.nn.modules import Embedding
 import torch as th
+from torch import nn
 
 
 def from_pretrained(embeddings, freeze=True):
-    r"""Creates Embedding instance from given 2-dimensional FloatTensor.
-
-    Args:
-        embeddings (Tensor): FloatTensor containing weights for the Embedding.
-            First dimension is being passed to Embedding as 'num_embeddings', second as 'embedding_dim'.
-        freeze (boolean, optional): If ``True``, the tensor does not get updated in the learning process.
-            Equivalent to ``embedding.weight.requires_grad = False``. Default: ``True``
-
-    Examples::
-
-        >>> # FloatTensor containing pretrained weights
-        >>> weight = torch.FloatTensor([[1, 2.3, 3], [4, 5.1, 6.3]])
-        >>> embedding = nn.Embedding.from_pretrained(weight)
-        >>> # Get embeddings for index 1
-        >>> input = torch.LongTensor([1])
-        >>> embedding(input)
-        tensor([[ 4.0000,  5.1000,  6.3000]])
-    """
     assert embeddings.dim() == 2, \
         'Embeddings parameter is expected to be 2-dimensional'
     rows, cols = embeddings.shape
-    embedding = Embedding(num_embeddings=rows, embedding_dim=cols, _weight=embeddings)
+    embedding = Embedding(num_embeddings=rows, embedding_dim=cols)
+    embedding.weight = nn.Parameter(embeddings)
     embedding.weight.requires_grad = not freeze
     return embedding
 
@@ -43,6 +28,7 @@ class WordVectorLoader:
 
     @classmethod
     def build(cls, dwords):
+        print('Build embedding')
         cls.sense_num = min(dwords.values())
         nlp = spacy.load('en_core_web_lg')
         word_vec = [None] * len(dwords)
@@ -53,10 +39,12 @@ class WordVectorLoader:
             index2word[i] = word
 
         assert all((x is not None for x in word_vec))
+        print('loading embedding finished')
         cls.embeddings = from_pretrained(th.Tensor(word_vec), True)
+        print('Load embedding from pre-trained finished')
         cls.index2word = index2word
         cls.word2index = dwords
-        cls.word_vec = word_vec
+        cls.word_vec = np.array(word_vec)
         return cls.embeddings
 
     @classmethod

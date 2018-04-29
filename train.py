@@ -7,6 +7,8 @@
 #
 
 import numpy as np
+import torch as th
+import time
 import timeit
 from torch.utils.data import DataLoader
 import gc
@@ -51,7 +53,7 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
             loss = model.loss(preds, targets, size_average=True)
             loss.backward()
             optimizer.step(lr=lr)
-            epoch_loss.append(loss.data[0])
+            epoch_loss.append(loss.data.item())
         if rank == 1:
             emb = None
             if epoch == (opt.epochs - 1) or epoch % opt.eval_each == (opt.eval_each - 1):
@@ -68,3 +70,103 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
                     '}'
                 )
         gc.collect()
+
+
+class SingleThreadHandler:
+
+    def __init__(self, log, types, data, fout, distfn, ranking):
+        self.log = log
+        self.types = types
+        self.data = data
+        self.fout = fout
+        self.distfn = distfn
+        self.ranking = ranking
+        self.min_rank = (np.Inf, -1)
+        self.max_map = (0, -1)
+
+    def handle(self, msg):
+        log = self.log
+        types = self.types
+        data = self.data
+        fout = self.fout
+        distfn = self.distfn
+        ranking = self.ranking
+
+        epoch, elapsed, loss, model = msg
+        if model is not None:
+            # save model to fout
+            _fout = f'{fout}/{epoch}.nth'
+            log.info(f'Saving model f{_fout}')
+            th.save({
+                'model': model.state_dict(),
+                'epoch': epoch,
+                'objects': data.objects,
+            }, _fout)
+
+            # compute embedding quality
+            log.info('Computing ranking')
+            _start_time = time.time()
+            mrank, mAP = ranking(types, model, distfn)
+            log.info(f'Computing finished. Used time: {time.time() - _start_time}')
+            if mrank < self.min_rank[0]:
+                min_rank = (mrank, epoch)
+            if mAP > self.max_map[0]:
+                max_map = (mAP, epoch)
+            log.info(
+                ('eval: {'
+                 '"epoch": %d, '
+                 '"elapsed": %.2f, '
+                 '"loss": %.3f, '
+                 '"mean_rank": %.2f, '
+                 '"mAP": %.4f, '
+                 '"best_rank": %.2f, '
+                 '"best_mAP": %.4f}') % (
+                    epoch, elapsed, loss, mrank, mAP, self.min_rank[0], self.max_map[0])
+            )
+        else:
+            log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}}}')
+
+
+def single_thread_train(model, data, optimizer, opt, log, handler):
+    # setup parallel data loader
+    loader = DataLoader(
+        data,
+        batch_size=opt.batchsize,
+        shuffle=True,
+        num_workers=opt.ndproc,
+        collate_fn=data.collate
+    )
+
+    for epoch in range(opt.epochs):
+        epoch_loss = []
+        loss = None
+        data.burnin = False
+        lr = opt.lr
+        t_start = timeit.default_timer()
+        if epoch < opt.burnin:
+            data.burnin = True
+            lr = opt.lr * _lr_multiplier
+            if rank == 1:
+                log.info(f'Burnin: lr={lr}')
+        elapsed = 0
+        for inputs, targets in loader:
+            elapsed = timeit.default_timer() - t_start
+            optimizer.zero_grad()
+            preds = model(inputs)
+            loss = model.loss(preds, targets, size_average=True)
+            loss.backward()
+            optimizer.step(lr=lr)
+            epoch_loss.append(loss.data.item())
+        emb = None
+        if epoch == (opt.epochs - 1) or epoch % opt.eval_each == (opt.eval_each - 1):
+            emb = model
+        else:
+            log.info(
+                'info: {'
+                f'"elapsed": {elapsed}, '
+                f'"loss": {np.mean(epoch_loss)}, '
+                '}'
+            )
+        handler.handle(msg=(epoch, elapsed, np.mean(epoch_loss), emb))
+        gc.collect()
+

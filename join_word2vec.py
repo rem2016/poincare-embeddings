@@ -11,7 +11,7 @@ from torch import nn
 class WordModel(nn.Module):
     embedding_dim = 300
 
-    def __init__(self, hidden_size, output_size, layer_size=1):
+    def __init__(self, hidden_size, output_size, layer_size=1, word2vec=WordVectorLoader):
         super().__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
@@ -19,6 +19,8 @@ class WordModel(nn.Module):
                              [nn.Linear(hidden_size, hidden_size, bias=True) for _ in range(layer_size - 2)] +\
                              [nn.Linear(hidden_size, output_size + 1, bias=True)]
         self.activates = [nn.Tanh() for _ in range(layer_size + 1)]
+        self.word2vec = word2vec
+        self.word_num = len(word2vec.word2index)
         self.init_weights()
 
     def init_weights(self, scale=1e-1):
@@ -29,15 +31,25 @@ class WordModel(nn.Module):
         is_single_input = len(word_index.size()) == 0
         if is_single_input:
             word_index = word_index.view(1, )
-        v = WordVectorLoader.embeddings(word_index)
+        assert len(word_index.size()) == 1
+        v = self.word2vec.embeddings(word_index)
         for act, layer in zip(self.activates, self.linear_layers):
             v = act(layer(v))
+
         output = v.narrow(1, 0, self.output_size)
         radius = v.narrow(1, self.output_size, 1)
-        output = output / th.norm(output, 2, 1, keepdim=False) * radius.squeeze()
+        norm = th.norm(output, 2, 1, keepdim=False)
+        output = output / norm.view(-1, 1) * radius.view(-1, 1)
         if is_single_input:
             output = output.squeeze()
+
         return output
+
+    def embedding(self):
+        # cache the result may be even slower
+        with th.no_grad():
+            index = list(range(self.word_num))
+            return self.forward(th.LongTensor(index)).numpy()
 
 
 class EmbeddingWithWord(nn.Module):
@@ -64,13 +76,23 @@ class EmbeddingWithWord(nn.Module):
         fval = self._forward(e)
         return fval
 
-    def embedding(self):
+    def sense_embedding(self):
         return list(self.lt.parameters())[0].data.cpu().numpy()
 
+    def word_embedding(self):
+        return self.czx.embedding()
+
+    def embedding(self):
+        sense = self.sense_embedding()
+        word = self.word_embedding()
+        return np.concatenate((sense, word), axis=0)
+
     def embed(self, inputs):
+        size = list(inputs.size())
+        inputs = inputs.view(-1)
         es = [self.lt(x) if x < self.sense_num else self.czx(x - self.sense_num) for x in inputs]
         e = th.stack(es)
-        return e
+        return e.view(size + [self.dim])
 
 
 class SNEmbeddingWithWord(EmbeddingWithWord):

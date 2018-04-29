@@ -12,6 +12,7 @@ from word_vec_loader import WordVectorLoader
 import torch as th
 from torch import nn
 from numpy.linalg import norm
+from word_vec_loader import WordVectorLoader
 from torch.autograd import Function, Variable
 from torch.utils.data import Dataset
 from collections import defaultdict as ddict
@@ -147,14 +148,19 @@ class GraphDataset(Dataset):
         self._weights = ddict(lambda: ddict(int))
         self._counts = np.ones(len(objects), dtype=np.float)
         nents = 0
-        for i in range(idx.size(0)):
+        for i in range(idx.shape[0]):
             t, h, w = self.idx[i]
             self._counts[h] += w
             self._weights[t][h] += w
             nents = max((nents, t, h))
         self._weights = dict(self._weights)
         nents += 1
-        assert len(objects) == nents, f'Number of objects do no match {len(objects)} != {nents}'
+        if len(objects) != nents:
+            assert WordVectorLoader.word2index is not None, \
+                f'Number of objects do no match {len(objects)} != {nents}'
+            exp_num = len(objects) + len(WordVectorLoader.word2index)
+            assert exp_num == nents, \
+                f'Number of objects do no match {exp_num} != {nents}'
 
         if unigram_size > 0:
             c = self._counts ** self._dampening
@@ -165,7 +171,7 @@ class GraphDataset(Dataset):
             )
 
     def __len__(self):
-        return self.idx.size(0)
+        return self.idx.shape[0]
 
     @classmethod
     def collate(cls, batch):
@@ -177,7 +183,7 @@ class SNGraphDataset(GraphDataset):
     model_name = '%s_%s_dim%d'
 
     def __getitem__(self, i):
-        t, h, _ = self.idx[i]
+        t, h, _ = [int(x) for x in self.idx[i]]
         negs = set()
         ntries = 0
         nnegs = self.nnegs

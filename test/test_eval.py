@@ -8,7 +8,7 @@ import evaluation
 
 
 def test_evaluate():
-    path = '../model/noun_unknown/nouns.pth'
+    path = './model/noun_unknown/nouns.pth'
     ev = evaluation.Evaluator.initialize_by_file(path)
     print('exp', ev.evaluate(method='exp'))
     print('reci', ev.evaluate(method='reciprocal'))
