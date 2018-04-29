@@ -1,4 +1,3 @@
-import spacy
 import numpy as np
 from torch.nn.modules import Embedding
 import torch as th
@@ -27,21 +26,14 @@ class WordVectorLoader:
         raise NotImplemented("Static class")
 
     @classmethod
-    def build(cls, dwords):
-        print('Build embedding')
+    def build(cls, dwords, word_vec):
         cls.sense_num = min(dwords.values())
-        nlp = spacy.load('en_core_web_lg')
-        word_vec = [None] * len(dwords)
         index2word = [None] * len(dwords)
         for word, i in dwords.items():
-            i -= cls.sense_num
-            word_vec[i] = nlp(word).vector.tolist()
             index2word[i] = word
 
-        assert all((x is not None for x in word_vec))
-        print('loading embedding finished')
+        assert all((x is not None for x in index2word))
         cls.embeddings = from_pretrained(th.Tensor(word_vec), True)
-        print('Load embedding from pre-trained finished')
         cls.index2word = index2word
         cls.word2index = dwords
         cls.word_vec = np.array(word_vec)

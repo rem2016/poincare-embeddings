@@ -26,5 +26,5 @@ python3 embed.py \
        -fout model/zzzzTest \
        -batchsize 10 \
        -eval_each 10 \
-       -w2v_nn \
+       -w2v_sim \
        -override

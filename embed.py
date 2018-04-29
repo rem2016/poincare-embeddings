@@ -13,6 +13,7 @@ import time
 import logging
 import argparse
 from torch.autograd import Variable
+from word_vec_loader import WordVectorLoader
 from collections import defaultdict as ddict
 import torch.multiprocessing as mp
 import model, train, rsgd
@@ -140,7 +141,8 @@ def set_up_output_file_name(opt):
     if os.path.exists(opt.fout):
         if opt.override:
             print("This will rename the original result. Are you sure? [Y/n]")
-            s = input()
+            # s = input()
+            s = 'Y'
             if s.lower() == 'n':
                 sys.exit(0)
             else:
@@ -186,7 +188,7 @@ if __name__ == '__main__':
     log.info("Config")
     log.info(str(opt))
 
-    idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize, load_word=opt.w2v_nn)
+    idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize, load_word=opt.w2v_nn or opt.w2v_sim)
 
     # create adjacency list for evaluation
     test_idx = idx
@@ -241,14 +243,18 @@ if __name__ == '__main__':
 
     if opt.nproc == 0:
         handler = train.SingleThreadHandler(log, adjacency, data, opt.fout, distfn, ranking)
-        train.single_thread_train(model, data, optimizer, opt, log, handler)
+        if opt.w2v_sim:
+            train.single_thread_train(model, data, optimizer, opt, log,
+                                      handler, words_data=WordsDataset(WordVectorLoader.word_vec))
+        else:
+            train.single_thread_train(model, data, optimizer, opt, log, handler)
     else:
         queue = mp.Manager().Queue()
         model.share_memory()
         processes = []
         for rank in range(opt.nproc):
             if opt.w2v_sim:
-                word_data = WordsDataset()
+                word_data = WordsDataset(WordVectorLoader.word_vec)
                 p = mp.Process(
                     target=join_word2vec.train,
                     args=(model, data, word_data, optimizer, opt, log, rank + 1, queue)

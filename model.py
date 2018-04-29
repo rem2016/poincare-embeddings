@@ -8,7 +8,6 @@
 
 import numpy as np
 from numpy.random import choice, randint
-from word_vec_loader import WordVectorLoader
 import torch as th
 from torch import nn
 from numpy.linalg import norm
@@ -237,17 +236,19 @@ class SNGraphDataset(GraphDataset):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, pair_per_word=10):
+    def __init__(self, word_vec: np.array, pair_per_word: int=10):
         self.npair = pair_per_word
-        self.words = WordVectorLoader
-        self.word_num = len(self.words.word2index)
+        self.word_vec = word_vec
+        self.word_num = len(word_vec)
 
     def __getitem__(self, index):
         a_index = index // self.npair
         b_index = randint(0, self.word_num)
-        a = self.words.get_vec_by_index(a_index)
-        b = self.words.get_vec_by_index(b_index)
-        return th.LongTensor([a, b]).view(1, 2), th.FloatTensor(np.sum(a * b) / (norm(a) * norm(b)))
+        a = self.word_vec[a_index]
+        b = self.word_vec[b_index]
+        sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+        return th.LongTensor([[a_index, b_index]]), \
+               th.Tensor([sim]).view(1, )
 
     def __len__(self):
         return self.word_num * self.npair

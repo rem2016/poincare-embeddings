@@ -121,7 +121,8 @@ def calc_pair_sim(pairs):
     def _dist2sim(d):
          return 2 - 2 / (1 + th.exp(-d))
 
-    return th.cat([_dist2sim(_dist(pair[0], pair[1])) for pair in pairs])
+    assert len(pairs.size()) == 3 and pairs.size(1) == 2
+    return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
 
 
 def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
@@ -144,6 +145,7 @@ def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
 
     for epoch in range(opt.epochs):
         epoch_loss = []
+        epoch_words_loss = []
         loss = None
         data.burnin = False
         lr = opt.lr
@@ -169,7 +171,7 @@ def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
             loss = nn.MSELoss()(dists, targets)
             loss.backward()
             optimizer.step(lr=lr)
-            epoch_loss.append(loss.data[0])
+            epoch_words_loss.append(loss.data[0])
 
         if rank == 1:
             emb = None
@@ -184,6 +186,7 @@ def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
                     'info: {'
                     f'"elapsed": {elapsed}, '
                     f'"loss": {np.mean(epoch_loss)}, '
+                    f'"words_loss": {np.mean(epoch_words_loss) if len(epoch_words_loss) else None}'
                     '}'
                 )
         gc.collect()

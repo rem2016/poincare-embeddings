@@ -12,6 +12,7 @@ from nltk.corpus import wordnet as wn
 import numpy as np
 from word_vec_loader import WordVectorLoader
 import torch as th
+import spacy
 import argparse
 import random
 
@@ -62,8 +63,10 @@ def load_all_related_words(idx, objects, enames):
     :param enames: name => index
     :return: word => index
     """
-    ecount = count(len(objects))
+    ecount = count(0)
     dwords = ddict(ecount.__next__)
+    word_vec = []
+    nlp = spacy.load('en_core_web_lg')
     print('Loading wordnet words')
     for synset, index in enames.items():
         synset = wn.synset(synset)
@@ -72,10 +75,14 @@ def load_all_related_words(idx, objects, enames):
             if '_' in name:
                 continue
 
+            vector = nlp(name).vector
+            if np.sum(np.abs(vector)) < 1e-5:
+                continue
+            word_vec.append(vector)
             idx.append((dwords[name], index, 1))
 
     print(f'Total {len(dwords)} words are added')
-    return dwords
+    return dwords, word_vec
 
 
 def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
@@ -94,8 +101,8 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
     objects = intmap_to_list(dict(enames))
     dwords = None
     if load_word:
-        dwords = load_all_related_words(subs, objects, enames)
-        WordVectorLoader.build(dwords)
+        dwords, word_vec = load_all_related_words(subs, objects, enames)
+        WordVectorLoader.build(dwords, word_vec)
     idx = np.array(subs, dtype=np.int)
     print(f'slurp: objects={len(objects)}, edges={len(idx)}' + f', words={len(dwords)}' if load_word else '')
     return idx, objects, dwords
