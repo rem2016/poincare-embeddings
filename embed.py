@@ -210,13 +210,18 @@ if __name__ == '__main__':
     log.info("Config")
     log.info(str(opt))
 
-    idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize, load_word=opt.w2v_nn or opt.w2v_sim)
+    idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize,
+                                 load_word=opt.w2v_nn or opt.w2v_sim,
+                                 build_word_vector=True)
 
     # create adjacency list for evaluation
     test_adjacency = None
     train_adjacency = get_adjacency_by_idx(idx)
     if opt.dset_test != '':
-        test_idx, test_objects = slurp(opt.dset_test, symmetrize=opt.symmetrize, load_word=opt.w2v_nn or opt.w2v_sim)
+        test_idx, test_objects, dwords = slurp(opt.dset_test,
+                                               symmetrize=opt.symmetrize,
+                                               load_word=opt.w2v_nn or opt.w2v_sim,
+                                               build_word_vector=False)
         test_adjacency = get_adjacency_by_idx(test_idx)
 
     # setup Riemannian gradients for distances
