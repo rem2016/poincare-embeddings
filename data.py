@@ -117,8 +117,8 @@ def _get_root_and_leaf(idx):
     return root_and_leaf
 
 
-def split_data(fin, fout, max_test_rate=0.3):
-    idx, objs = slurp(fin)
+def split_data(fin, fout, max_test_rate=0.05):
+    idx, objs, _ = slurp(fin)
     root_and_leaf = _get_root_and_leaf(idx)
     train, test = [], []
     max_test_size = int(len(idx) * max_test_rate + 0.5)
@@ -131,6 +131,9 @@ def split_data(fin, fout, max_test_rate=0.3):
         else:
             train.append((objs[h], objs[t]))
 
+    print(f'TrainSet: {len(train)}')
+    print(f'TestSet: {len(test)}')
+    print(f'TestRate: {len(test) / (len(train) + len(test))}')
     with open(f'{fout}.train.tsv', 'w') as f:
         f.write('\n'.join(['\t'.join(x) for x in train]))
     with open(f'{fout}.test.tsv', 'w') as f:
