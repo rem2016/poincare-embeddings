@@ -135,6 +135,8 @@ def setup_log(opt):
 def set_up_output_file_name(opt):
     if opt.w2v_nn:
         opt.fout += '_w2vnn'
+    if opt.w2v_sim:
+        opt.fout += '_w2vsim'
     if opt.symmetrize:
         opt.fout += '_sym'
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
