@@ -167,26 +167,27 @@ def train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
         for inputs, targets in words_loader:
             elapsed = timeit.default_timer() - t_start
             optimizer.zero_grad()
-            dists = calc_pair_sim(model.embed(inputs.squeeze()).view(len(targets), 2))
+            dists = calc_pair_sim(model.embed(inputs))
             loss = nn.MSELoss()(dists, targets)
             loss.backward()
             optimizer.step(lr=lr)
             epoch_words_loss.append(loss.data[0])
 
         if rank == 1:
+            word_sim_loss = np.mean(epoch_words_loss) if len(epoch_words_loss) else None
             emb = None
             if epoch == (opt.epochs - 1) or epoch % opt.eval_each == (opt.eval_each - 1):
                 emb = model
             if queue is not None:
                 queue.put(
-                    (epoch, elapsed, np.mean(epoch_loss), emb)
+                    (epoch, elapsed, np.mean(epoch_loss), emb, word_sim_loss)
                 )
             else:
                 log.info(
                     'info: {'
                     f'"elapsed": {elapsed}, '
                     f'"loss": {np.mean(epoch_loss)}, '
-                    f'"words_loss": {np.mean(epoch_words_loss) if len(epoch_words_loss) else None}'
+                    f'"words_loss": {word_sim_loss}'
                     '}'
                 )
         gc.collect()

@@ -62,7 +62,7 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes, w2v_nn, w
                 p.terminate()
             break
         else:
-            epoch, elapsed, loss, model = msg
+            epoch, elapsed, loss, model, word_sim_loss = msg
         if model is not None:
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
@@ -87,11 +87,12 @@ def control(queue, log, types, data, fout, distfn, nepochs, processes, w2v_nn, w
                  '"epoch": %d, '
                  '"elapsed": %.2f, '
                  '"loss": %.3f, '
+                 '"word_sim_loss": %.3f, '
                  '"mean_rank": %.2f, '
                  '"mAP": %.4f, '
                  '"best_rank": %.2f, '
                  '"best_mAP": %.4f}') % (
-                     epoch, elapsed, loss, mrank, mAP, min_rank[0], max_map[0])
+                     epoch, elapsed, loss, word_sim_loss, mrank, mAP, min_rank[0], max_map[0])
             )
         else:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}}}')
