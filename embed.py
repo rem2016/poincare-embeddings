@@ -211,7 +211,7 @@ if __name__ == '__main__':
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
     parser.add_argument('-w2v_nn', help='Use word2vec NN to map', action='store_true', default=False)
-    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=1)
+    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=2)
     parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=100)
     parser.add_argument('-w2v_sim', help='Use word2vec sim to map', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
