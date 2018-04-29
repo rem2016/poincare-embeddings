@@ -81,7 +81,7 @@ def load_all_related_words(idx, objects, enames):
             for lemma in synset.lemmas():
                 name = lemma.name()
                 if name in dwords:
-                    idx.append((dwords[word], index, 1))
+                    idx.append((dwords[name], index, 1))
 
     dwords = {}
     word_vec = []
