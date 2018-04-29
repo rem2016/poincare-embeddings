@@ -9,6 +9,7 @@
 from itertools import count
 from collections import defaultdict as ddict
 from nltk.corpus import wordnet as wn
+from collections import Counter
 import numpy as np
 from word_vec_loader import WordVectorLoader
 import torch as th
@@ -125,6 +126,8 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False):
 
 
 # randomly hold out links
+
+
 def _get_root_and_leaf(idx):
     as_head = set()
     as_tail = set()
@@ -140,16 +143,31 @@ def _get_root_and_leaf(idx):
     return root_and_leaf
 
 
+SELDOM_THRESHOLD = 5
+
+
+def _get_seldom_appear(idx):
+    nodes = Counter()
+    for row in idx:
+        h, t, _ = [int(x) for x in row]
+        nodes[h] += 1
+        nodes[t] += 1
+
+    return {x for x, c in nodes.items() if c < SELDOM_THRESHOLD}
+
+
 def split_data(fin, fout, max_test_rate=0.05):
     idx, objs, _ = slurp(fin)
     root_and_leaf = _get_root_and_leaf(idx)
+    seldom_appear = _get_seldom_appear(idx)
+    forbidden_node = root_and_leaf | seldom_appear
     train, test = [], []
     max_test_size = int(len(idx) * max_test_rate + 0.5)
     random.shuffle(idx)
     for h, t, _ in idx:
         t = int(t)
         h = int(h)
-        if t not in root_and_leaf and h not in root_and_leaf and len(test) < max_test_size:
+        if t not in forbidden_node and h not in forbidden_node and len(test) < max_test_size:
             test.append((objs[h], objs[t]))
         else:
             train.append((objs[h], objs[t]))
@@ -169,5 +187,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Split Data')
     parser.add_argument('-input', help='Input data path', type=str, required=True)
     parser.add_argument('-output', help='Output data path', type=str, required=True)
+    parser.add_argument('-test_rate', help='Test size rate', type=float, default=0.05)
     opt = parser.parse_args()
-    split_data(opt.input, opt.output)
+    split_data(opt.input, opt.output, opt.test_rate)
