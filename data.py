@@ -63,25 +63,41 @@ def load_all_related_words(idx, objects, enames):
     :param enames: name => index
     :return: word => index
     """
-    ecount = count(0)
-    dwords = ddict(ecount.__next__)
+
+    def get_all_related_words():
+        _words = set()
+        for synset, index in enames.items():
+            synset = wn.synset(synset)
+            for lemma in synset.lemmas():
+                name = lemma.name()
+                if '_' in name:
+                    continue
+                _words.add(name)
+        return list(_words)
+
+    def add_words_to_graph():
+        for synset, index in enames.items():
+            synset = wn.synset(synset)
+            for lemma in synset.lemmas():
+                name = lemma.name()
+                if name in dwords:
+                    idx.append((dwords[word], index, 1))
+
+    dwords = {}
     word_vec = []
     nlp = spacy.load('en_core_web_lg')
     print('Loading wordnet words')
-    for synset, index in enames.items():
-        synset = wn.synset(synset)
-        for lemma in synset.lemmas():
-            name = lemma.name()
-            if '_' in name:
-                continue
+    all_words = get_all_related_words()
+    for word, token in zip(all_words, nlp(' '.join(all_words))):
+        vector = token.vector
+        if np.sum(np.abs(vector)) < 1e-5:
+            continue
+        dwords[word] = len(word_vec)
+        word_vec.append(vector)
 
-            vector = nlp(name).vector
-            if np.sum(np.abs(vector)) < 1e-5:
-                continue
-            word_vec.append(vector)
-            idx.append((dwords[name], index, 1))
-
+    add_words_to_graph()
     print(f'Total {len(dwords)} words are added')
+    word_vec = np.array(word_vec)
     return dwords, word_vec
 
 
