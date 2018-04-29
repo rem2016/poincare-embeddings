@@ -63,7 +63,7 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
                 emb = model
             if queue is not None:
                 queue.put(
-                    (epoch, elapsed, np.mean(epoch_loss), emb)
+                    (epoch, elapsed, np.mean(epoch_loss), emb, None)
                 )
             else:
                 log.info(

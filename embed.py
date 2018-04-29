@@ -84,7 +84,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             if test_adj is not None:
                 test_mrank, test_mAP = ranking(test_adj, model, distfn)
                 mrank, mAP = test_mrank, test_mAP
-                test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}'
+                test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
 
             if mrank < min_rank[0]:
                 min_rank = (train_mrank, epoch)
@@ -96,12 +96,11 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                  '"epoch": %d, '
                  '"elapsed": %.2f, '
                  '"loss": %.3f, '
-                 '"word_sim_loss": %.3f, '
                  '"train_mean_rank": %.2f, '
                  '"train_mAP": %.4f, '
                  '"best_rank": %.2f, '
                  '"best_mAP": %.4f%s}') % (
-                     epoch, elapsed, loss, word_sim_loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
+                     epoch, elapsed, loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
             )
         else:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, '
@@ -153,9 +152,8 @@ def set_up_output_file_name(opt):
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
     if os.path.exists(opt.fout):
         if opt.override:
-            print("This will rename the original result. Are you sure? [Y/n]")
-            # s = input()
-            s = 'Y'
+            print("This will rename the original result. Make sure you have closed the corresponding program [Y/n]")
+            s = input()
             if s.lower() == 'n':
                 sys.exit(0)
             else:
@@ -164,7 +162,15 @@ def set_up_output_file_name(opt):
                     i += 1
                 os.rename(opt.fout, f'{opt.fout}[{i}]')
         else:
-            raise EnvironmentError('There is already a output file called ' + opt.fout)
+            print("This will rename the original result. Make sure you have closed the corresponding program [y/N]")
+            s = input()
+            if s.lower() != 'y':
+                sys.exit(0)
+            else:
+                i = 0
+                while os.path.exists(f'{opt.fout}[{i}]'):
+                    i += 1
+                os.rename(opt.fout, f'{opt.fout}[{i}]')
 
     os.makedirs(opt.fout)
 
@@ -220,7 +226,7 @@ if __name__ == '__main__':
     if opt.dset_test != '':
         test_idx, test_objects, dwords = slurp(opt.dset_test,
                                                symmetrize=opt.symmetrize,
-                                               load_word=opt.w2v_nn or opt.w2v_sim,
+                                               load_word=False,  # Test test set should be the same
                                                build_word_vector=False)
         test_adjacency = get_adjacency_by_idx(test_idx)
 
