@@ -26,5 +26,5 @@ python3 embed.py \
        -dset_test wordnet/noun_closure.test.tsv \
        -fout model/nouns.50d.train \
        -batchsize 50 \
-       -eval_each 20 \
+       -eval_each 5 \
        -w2v_nn
