@@ -18,7 +18,7 @@ python3 embed.py \
        -dim 10 \
        -lr 1.0 \
        -epochs 800 \
-       -negs 50 \
+       -negs 10 \
        -burnin 20 \
        -nproc "${NTHREADS}" \
        -distfn poincare \
@@ -26,4 +26,5 @@ python3 embed.py \
        -dset_test wordnet/mammal_closure.test.tsv \
        -fout model/mammals.10d.train \
        -batchsize 50 \
-       -eval_each 10 \
+       -eval_each 5 \
+       -w2v_nn

@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.random import choice, randint
 import torch as th
+from model import SNEmbedding
 from torch import nn
 from numpy.linalg import norm
 from word_vec_loader import WordVectorLoader

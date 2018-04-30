@@ -243,7 +243,7 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
                 elapsed = timeit.default_timer() - t_start
                 optimizer.zero_grad()
                 dists = calc_pair_sim(model.embed(inputs))
-                loss = nn.MSELoss()(dists, targets)
+                loss = 20 * nn.MSELoss()(dists, targets)
                 loss.backward()
                 optimizer.step(lr=lr)
                 epoch_words_loss.append(loss.data[0])

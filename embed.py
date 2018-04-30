@@ -13,6 +13,7 @@ import numpy as np
 import time
 import logging
 import argparse
+from evaluation import Evaluator
 from torch.autograd import Variable
 from word_vec_loader import WordVectorLoader
 from collections import defaultdict as ddict
@@ -65,6 +66,11 @@ def ranking(types, _model, distfn, sense_num):
     return np.mean(ranks), np.mean(ap_scores)
 
 
+def eval_human(_model, objs):
+    ev = Evaluator(_model.embedding(), objs)
+    return ev.evaluate()
+
+
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
     min_rank = (np.Inf, -1)
     max_map = (0, -1)
@@ -81,10 +87,12 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
             log.info(f'Saving model f{_fout}')
+            log.info(str(eval_human(model, data.objects)))
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,
                 'objects': data.objects,
+                'word_index': WordVectorLoader.index2word
             }, _fout)
 
             # TODO if any error occurs here, refactor
@@ -167,7 +175,7 @@ def set_up_output_file_name(opt):
     if os.path.exists(opt.fout):
         if opt.override:
             print("This will rename the original result. Make sure you have closed the corresponding program [Y/n]")
-            s = input()
+            s = 'y'
             if s.lower() == 'n':
                 sys.exit(0)
             else:
@@ -216,8 +224,8 @@ if __name__ == '__main__':
     parser.add_argument('-debug', help='Print debug output', action='store_true', default=False)
     parser.add_argument('-symmetrize', help='Use symmetrize data', action='store_true', default=False)
     parser.add_argument('-w2v_nn', help='Use word2vec NN to map', action='store_true', default=False)
-    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=2)
-    parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=100)
+    parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=1)
+    parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=50)
     parser.add_argument('-w2v_sim', help='Use word2vec sim to map', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     opt = parser.parse_args()
@@ -238,7 +246,7 @@ if __name__ == '__main__':
     test_adjacency = None
     train_adjacency = get_adjacency_by_idx(idx)
     if opt.dset_test != '':
-        test_idx, test_objects, dwords = slurp(opt.dset_test,
+        test_idx, test_objects, test_dwords = slurp(opt.dset_test,
                                                symmetrize=opt.symmetrize,
                                                load_word=False,  # Test test set should be the same
                                                build_word_vector=False)

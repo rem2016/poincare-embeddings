@@ -176,6 +176,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         collate_fn=data.collate
     )
 
+    loss_balance = 1
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
@@ -201,7 +202,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
             elapsed = timeit.default_timer() - t_start
             optimizer.zero_grad()
             dists = calc_pair_sim(model.embed(inputs))
-            loss = nn.MSELoss()(dists, targets)
+            loss = nn.MSELoss()(dists, targets) * loss_balance
             loss.backward()
             optimizer.step(lr=lr)
             epoch_words_loss.append(loss.data.item())
@@ -223,4 +224,9 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     f'"words_loss": {word_sim_loss}'
                     '}'
                 )
+
+        if epoch >= opt.burnin * 2:
+            loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
+            if rank == 1:
+                log.info(f'Loss balance: {loss_balance}')
         gc.collect()

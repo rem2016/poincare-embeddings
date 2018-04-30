@@ -10,9 +10,9 @@ from nltk.corpus import wordnet as wn
 from sematch.utility import memoized
 
 
-class Evaluator():
-    data_word_noun = ['noun_rg','noun_mc','noun_ws353','noun_ws353-sim','noun_simlex']
-    sim_methods_noun = ['path','lch','wup','li','res','lin','jcn','wpath']
+class Evaluator:
+    data_word_noun = ['noun_rg', 'noun_mc', 'noun_ws353', 'noun_ws353-sim', 'noun_simlex']
+    sim_methods_noun = ['path', 'lch', 'wup', 'li', 'res', 'lin', 'jcn', 'wpath']
     ws_eval = WordSimEvaluation()
     _wn_lemma = WordNetLemmatizer()
 
@@ -22,10 +22,10 @@ class Evaluator():
     def load(self, embs, objs):
         return {wn.synset(objs[i]): emb for i, emb in enumerate(embs)}
 
-    def evaluate(self, method='exp'):
+    def evaluate(self, method='tanh'):
         sim = lambda x, y: self.word_similarity(x, y, method)
-        cors = [self.ws_eval.evaluate_metric('poincare', sim, dset_name, save_results=True) for dset_name in self.data_word_noun]
-        print('Calc cors')
+        cors = [self.ws_eval.evaluate_metric('poincare', sim, dset_name, save_results=True) for dset_name in
+                self.data_word_noun]
         cors = {name: cor for name, cor in zip(self.data_word_noun, cors)}
         return cors
 
@@ -42,17 +42,21 @@ class Evaluator():
     def syn_similarity_gen(self, dist2sim):
         mapping_methods = {
             'reciprocal': lambda x: 1 / (1 + x),
-            'neg': lambda x: (33-x) / 33,
+            'neg': lambda x: (33 - x) / 33,
             'exp': lambda x: np.exp(-x),
-            'tanh': lambda x: 2 - 2/(1 + np.exp(-x)),
+            'tanh': lambda x: 2 - 2 / (1 + np.exp(-x)),
         }
 
         if dist2sim not in mapping_methods:
             raise NotImplementedError()
 
         def sim(x, y):
-            dist = self.get_dist(self.synmap[x], self.synmap[y])
-            return mapping_methods[dist2sim](dist)
+            try:
+                dist = self.get_dist(self.synmap[x], self.synmap[y])
+            except KeyError:
+                return 0
+            _sim = mapping_methods[dist2sim](dist)
+            return _sim
 
         return sim
 
@@ -61,10 +65,10 @@ class Evaluator():
         return wn.synsets(word, pos)
 
     def get_dist(self, v1, v2):
-         s = norm((v1 - v2))**2 
-         m = (1 - norm(v1)**2) * (1 - norm(v2)**2)
-         ans = np.arccosh(1 + 2*s/m)
-         return ans
+        s = norm((v1 - v2)) ** 2
+        m = (1 - norm(v1) ** 2) * (1 - norm(v2) ** 2)
+        ans = np.arccosh(1 + 2 * s / m)
+        return ans
 
     def max_synset_similarity(self, syns1, syns2, sim_metric):
         """
@@ -81,4 +85,3 @@ class Evaluator():
         with open(fin, 'rb') as f:
             model = th.load(f)
         return Evaluator(model['model']['lt.weight'], model['objects'])
-
