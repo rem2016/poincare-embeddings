@@ -227,6 +227,7 @@ if __name__ == '__main__':
     parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=1)
     parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=50)
     parser.add_argument('-w2v_sim', help='Use word2vec sim to map', action='store_true', default=False)
+    parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     opt = parser.parse_args()
 
@@ -239,7 +240,7 @@ if __name__ == '__main__':
     log.info(str(opt))
 
     idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize,
-                                 load_word=opt.w2v_nn or opt.w2v_sim,
+                                 load_word=opt.w2v_nn or opt.w2v_sim or opt.word,
                                  build_word_vector=True)
 
     # create adjacency list for evaluation
