@@ -44,14 +44,16 @@ def ranking(types, _model, distfn, sense_num):
             s_e = Variable(lt[s].expand_as(embedding), volatile=True)
             _dists = _model.dist()(s_e, embedding).data.cpu().numpy().flatten()
             _dists[s] = 1e+12
-            for i in range(sense_num, len(_dists)):
-                _dists[i] = np.Inf
             _labels = np.zeros(embedding.size(0))
             _dists_masked = _dists.copy()
             _ranks = []
             for o in s_types:
                 _dists_masked[o] = np.Inf
                 _labels[o] = 1
+            # Caution
+            # ignore all words
+            for i in range(sense_num, len(_dists)):
+                _dists_masked[i] = np.Inf
             ap_scores.append(average_precision_score(_labels, -_dists))
             for o in s_types:
                 d = _dists_masked.copy()
