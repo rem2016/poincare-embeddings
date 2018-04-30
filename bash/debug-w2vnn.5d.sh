@@ -20,7 +20,7 @@ python3 embed.py \
        -epochs 500 \
        -negs 50 \
        -burnin 20 \
-       -nproc "debug-w2vnn.5d.sh${NTHREADS}" \
+       -nproc "${NTHREADS}" \
        -distfn poincare \
        -dset wordnet/debug.tsv \
        -fout model/zzzzTest \

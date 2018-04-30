@@ -6,7 +6,8 @@
 # LICENSE file in the root directory of this source tree.
 #
 import torch as th
-from model import WordsDataset
+from data_loader import WordsDataset
+import data_loader
 import os
 import numpy as np
 import time
@@ -258,10 +259,14 @@ if __name__ == '__main__':
         raise ValueError(f'Unknown distance function {opt.distfn}')
 
     # initialize model and data
+    word_as_head_data = None
+    word_as_neg_data = None
     if opt.w2v_nn:
-        model, data, model_name, conf = model.SNGraphDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
+        model, data, model_name, conf = data_loader.SNGraphDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
+        word_as_head_data = data_loader.WordAsHeadDataset(idx, objects, opt.negs, sense_num=len(objects))
+        word_as_neg_data = data_loader.WordAsNegDataset(idx, objects, opt.negs, words_num=len(dwords))
     else:
-        model, data, model_name, conf = model.SNGraphDataset.initialize(distfn, opt, idx, objects)
+        model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects)
 
     # Build config string for log
     conf = [
@@ -288,9 +293,14 @@ if __name__ == '__main__':
         handler = train.SingleThreadHandler(log, train_adjacency, test_adjacency, data, opt.fout, distfn, ranking)
         if opt.w2v_sim:
             train.single_thread_train(model, data, optimizer, opt, log,
-                                      handler, words_data=WordsDataset(WordVectorLoader.word_vec))
+                                      handler,
+                                      words_data=WordsDataset(WordVectorLoader.word_vec),
+                                      w_head_data=word_as_head_data,
+                                      w_neg_data=word_as_neg_data)
         else:
-            train.single_thread_train(model, data, optimizer, opt, log, handler)
+            train.single_thread_train(model, data, optimizer, opt, log, handler,
+                                      w_head_data=word_as_head_data,
+                                      w_neg_data=word_as_neg_data)
     else:
         queue = mp.Manager().Queue()
         model.share_memory()
@@ -305,14 +315,17 @@ if __name__ == '__main__':
             else:
                 p = mp.Process(
                     target=train.train_mp,
-                    args=(model, data, optimizer, opt, log, rank + 1, queue)
+                    args=(model, data, optimizer, opt, log, rank + 1,
+                          queue, word_as_head_data, word_as_neg_data)
                 )
             p.start()
             processes.append(p)
 
         ctrl = mp.Process(
             target=control,
-            args=(queue, log, train_adjacency, test_adjacency, data, opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
+            args=(
+                queue, log, train_adjacency, test_adjacency, data, opt.fout,
+                distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
         )
         ctrl.start()
         ctrl.join()

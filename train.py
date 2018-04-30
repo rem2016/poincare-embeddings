@@ -17,23 +17,55 @@ from torch.utils.data import DataLoader
 import gc
 
 
-def train_mp(model, data, optimizer, opt, log, rank, queue):
+if th.cuda.is_available():
+    device = th.device('cuda')
+else:
+    device = th.device('cpu')
+
+
+_lr_multiplier = 0.01
+
+
+def train_mp(model, data, optimizer, opt, log, rank, queue, w_head=None, w_neg=None):
     try:
-        train(model, data, optimizer, opt, log, rank, queue)
+        train(model, data, optimizer, opt, log, rank, queue, w_head, w_neg)
     except Exception as err:
         log.exception(err)
         queue.put(None)
 
 
-def train(model, data, optimizer, opt, log, rank=1, queue=None):
+def train(model, data, optimizer, opt, log, rank=1, queue=None, w_head_data=None, w_neg_data=None):
     # setup parallel data loader
     loader = DataLoader(
         data,
         batch_size=opt.batchsize,
         shuffle=True,
         num_workers=opt.ndproc,
-        collate_fn=data.collate
+        collate_fn=data.collate,
+        timeout=200
     )
+
+    head_loader = []
+    neg_loader = []
+    if w_head_data is not None:
+        head_loader = DataLoader(
+            w_head_data,
+            batch_size=opt.batchsize,
+            shuffle=True,
+            num_workers=opt.ndproc,
+            collate_fn=w_head_data.collate,
+            timeout=200
+        )
+
+    if w_neg_data is not None:
+        neg_loader = DataLoader(
+            w_neg_data,
+            batch_size=opt.batchsize,
+            shuffle=True,
+            num_workers=opt.ndproc,
+            collate_fn=w_neg_data.collate,
+            timeout=200
+        )
 
     for epoch in range(opt.epochs):
         epoch_loss = []
@@ -50,14 +82,19 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
             lr = opt.lr * _lr_multiplier
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
-        for inputs, targets in loader:
-            elapsed = timeit.default_timer() - t_start
-            optimizer.zero_grad()
-            preds = model(inputs)
-            loss = model.loss(preds, targets, size_average=True)
-            loss.backward()
-            optimizer.step(lr=lr)
-            epoch_loss.append(loss.data.item())
+
+        for _loader, params in ((loader, {}),
+                                (head_loader, dict(fix_nn=False, embed_index=(1, 0, 1))),
+                                (neg_loader, dict(fix_nn=False, embed_index=(1, 2, opt.negs)))):
+            for inputs, targets in _loader:
+                elapsed = timeit.default_timer() - t_start
+                optimizer.zero_grad()
+                preds = model(inputs.to(device), **params)
+                loss = model.loss(preds, targets, size_average=True)
+                loss.backward()
+                optimizer.step(lr=lr)
+                epoch_loss.append(loss.data.item())
+
         if rank == 1:
             emb = None
             if epoch == (opt.epochs - 1) or epoch % opt.eval_each == (opt.eval_each - 1):
@@ -73,6 +110,7 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
                     f'"loss": {np.mean(epoch_loss)}, '
                     '}'
                 )
+
         gc.collect()
 
 
@@ -131,7 +169,8 @@ class SingleThreadHandler:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}}}')
 
 
-def single_thread_train(model, data, optimizer, opt, log, handler, words_data=None):
+def single_thread_train(model, data, optimizer, opt, log, handler, words_data=None,
+                        w_head_data=None, w_neg_data=None):
     # setup parallel data loader
     loader = DataLoader(
         data,
@@ -151,6 +190,28 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
             collate_fn=data.collate
         )
 
+    head_loader = []
+    neg_loader = []
+    if w_head_data is not None:
+        head_loader = DataLoader(
+            w_head_data,
+            batch_size=opt.batchsize,
+            shuffle=True,
+            num_workers=opt.ndproc,
+            collate_fn=w_head_data.collate,
+            timeout=200
+        )
+
+    if w_neg_data is not None:
+        neg_loader = DataLoader(
+            w_neg_data,
+            batch_size=opt.batchsize,
+            shuffle=True,
+            num_workers=opt.ndproc,
+            collate_fn=w_head_data.collate,
+            timeout=200
+        )
+
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
@@ -163,14 +224,19 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
             lr = opt.lr * _lr_multiplier
             log.info(f'Burnin: lr={lr}')
         elapsed = 0
-        for inputs, targets in loader:
-            elapsed = timeit.default_timer() - t_start
-            optimizer.zero_grad()
-            preds = model(inputs)
-            loss = model.loss(preds, targets, size_average=True)
-            loss.backward()
-            optimizer.step(lr=lr)
-            epoch_loss.append(loss.data.item())
+        for _loader, params in ((loader, {}),
+                                (head_loader, dict(fix_nn=False, embed_index=(1, 0, 1))),
+                                (neg_loader, dict(fix_nn=False, embed_index=(1, 2, opt.negs)))):
+            for inputs, targets in _loader:
+                inputs = inputs.to(device, dtype=th.long)
+                targets = targets.to(device, dtype=th.long)
+                elapsed = timeit.default_timer() - t_start
+                optimizer.zero_grad()
+                preds = model(inputs, **params)
+                loss = model.loss(preds, targets, size_average=True)
+                loss.backward()
+                optimizer.step(lr=lr)
+                epoch_loss.append(loss.data.item())
 
         if words_data is not None:
             for inputs, targets in words_loader:
