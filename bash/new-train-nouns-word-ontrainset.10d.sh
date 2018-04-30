@@ -24,7 +24,7 @@ python3 embed.py \
        -distfn poincare \
        -dset wordnet/noun_closure.train.tsv \
        -dset_test wordnet/noun_closure.test.tsv \
-       -fout model/nouns.10d.train \
+       -fout model/nouns.10d.train.linkword \
        -batchsize 40 \
        -eval_each 10 \
        -word
