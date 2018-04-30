@@ -17,9 +17,6 @@ from torch.utils.data import DataLoader
 import gc
 
 
-_lr_multiplier = 0.01
-
-
 def train_mp(model, data, optimizer, opt, log, rank, queue):
     try:
         train(model, data, optimizer, opt, log, rank, queue)
@@ -46,6 +43,10 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None):
         t_start = timeit.default_timer()
         if epoch < opt.burnin:
             data.burnin = True
+            if opt.burnin <= 10:
+                _lr_multiplier = 0.1
+            else:
+                _lr_multiplier = 0.01
             lr = opt.lr * _lr_multiplier
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
