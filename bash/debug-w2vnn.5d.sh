@@ -23,7 +23,7 @@ python3 embed.py \
        -nproc "${NTHREADS}" \
        -distfn poincare \
        -dset wordnet/debug.tsv \
-       -fout model/zzzzTest \
+       -fout model/zzzz1Test \
        -batchsize 10 \
        -eval_each 10 \
        -w2v_nn \

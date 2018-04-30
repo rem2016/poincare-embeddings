@@ -7,6 +7,11 @@ from torch.utils.data import DataLoader
 import torch as th
 from torch import nn
 
+if th.cuda.is_available():
+    device = th.device('cuda')
+else:
+    device = th.device('cpu')
+
 
 class WordModel(nn.Module):
     embedding_dim = 300
@@ -15,40 +20,45 @@ class WordModel(nn.Module):
         super().__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
-        self.linear_layers = [nn.Linear(self.embedding_dim, hidden_size, bias=True)] +\
-                             [nn.Linear(hidden_size, hidden_size, bias=True) for _ in range(layer_size - 2)] +\
-                             [nn.Linear(hidden_size, output_size + 1, bias=True)]
-        self.activates = [nn.Tanh() for _ in range(layer_size + 1)]
+        self.linear_layers = [nn.Linear(self.embedding_dim, hidden_size, bias=True).to(device)] +\
+                             [nn.Linear(hidden_size, hidden_size, bias=True).to(device) for _ in range(layer_size - 2)] +\
+                             [nn.Linear(hidden_size, output_size + 1, bias=True).to(device)]
         self.word2vec = word2vec
         self.word_num = len(word2vec.word2index)
         self.init_weights()
+        word_index = th.LongTensor(list(range(self.word_num)))
+        self.cached = self._s_forward(word_index)
 
     def init_weights(self, scale=1e-1):
         for layer in self.linear_layers:
             layer.state_dict()['weight'].uniform_(-scale, scale)
 
-    def forward(self, word_index):
-        is_single_input = len(word_index.size()) == 0
-        if is_single_input:
-            word_index = word_index.view(1, )
-        assert len(word_index.size()) == 1
+    def _s_forward(self, word_index):
+        size = list(word_index.size())
+        word_index = word_index.contiguous().view(-1).to(device)
         v = self.word2vec.embeddings(word_index)
-        for act, layer in zip(self.activates, self.linear_layers):
-            v = act(layer(v))
+        for layer in self.linear_layers:
+            v = layer(v).tanh()
 
         output = v.narrow(1, 0, self.output_size)
         radius = v.narrow(1, self.output_size, 1)
         norm = th.norm(output, 2, 1, keepdim=False)
         output = output / norm.view(-1, 1) * radius.view(-1, 1)
-        if is_single_input:
-            output = output.squeeze()
+        output = output.view(*(size + [self.output_size]))
+        return output
 
+    def forward(self, word_index, no_grad=False):
+        if no_grad:
+            with th.no_grad():
+                return self.cached[word_index.view(-1)].view(*(word_index.size() + [self.output_size]))
+        else:
+            output = self._s_forward(word_index)
+            self.cached[word_index.contiguous().view(-1)] = output.view(-1, self.output_size)
         return output
 
     def embedding(self):
-        # cache the result may be even slower
         with th.no_grad():
-            index = list(range(self.word_num))
+            index = th.LongTensor(list(range(self.word_num)))
             return self.forward(th.LongTensor(index)).numpy()
 
 
@@ -64,15 +74,15 @@ class EmbeddingWithWord(nn.Module):
             scale_grad_by_freq=False
         )
         self.sense_num = sense_num
-        self.czx = WordModel(hidden_size=hidden_size, output_size=dim, layer_size=layer_size)
+        self.czx = WordModel(hidden_size=hidden_size, output_size=dim, layer_size=layer_size).to(device)
         self.dist = dist
         self.init_weights()
 
     def init_weights(self, scale=1e-4):
         self.lt.state_dict()['weight'].uniform_(-scale, scale)
 
-    def forward(self, inputs):
-        e = self.embed(inputs)
+    def forward(self, inputs, fix_nn=True, embed_index: tuple=None):
+        e = self.embed(inputs, fix_nn, embed_index)
         fval = self._forward(e)
         return fval
 
@@ -87,12 +97,35 @@ class EmbeddingWithWord(nn.Module):
         word = self.word_embedding()
         return np.concatenate((sense, word), axis=0)
 
-    def embed(self, inputs):
+    def embed(self, inputs, no_grad: bool, embed_slice: tuple=None):
+        if no_grad:
+            e = self.embed_with_nn_fixed(inputs)
+        else:
+            e = self.embed_with_slice(inputs, embed_slice)
+        return e
+
+    def embed_with_slice(self, inputs, embed_slice):
+        assert len(embed_slice) == 3
+        dim, start, length = embed_slice
+        e = inputs.narrow(*embed_slice)
+        e = self.czx(e - self.sense_num)
+        if start > 0:
+            b = inputs.narrow(dim, 0, start)
+            b = self.lt(b)
+            e = th.cat((b, e), dim)
+        if start + length < inputs.size()[dim]:
+            b = inputs.narrow(dim, start + length, inputs.size()[dim] - start - length)
+            b = self.lt(b)
+            e = th.cat((e, b), dim)
+        return e
+
+    def embed_with_nn_fixed(self, inputs):
         size = list(inputs.size())
         inputs = inputs.view(-1)
-        es = [self.lt(x) if x < self.sense_num else self.czx(x - self.sense_num) for x in inputs]
+        es = [self.lt(x) if x < self.sense_num else self.czx(x - self.sense_num, no_grad=True) for x in inputs]
         e = th.stack(es)
-        return e.view(size + [self.dim])
+        e = e.view(size + [self.dim])
+        return e
 
 
 class SNEmbeddingWithWord(EmbeddingWithWord):
