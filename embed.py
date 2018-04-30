@@ -33,7 +33,7 @@ def random_sample(adj, num):
     return random.sample(_data, num)
 
 
-def ranking(types, _model, distfn):
+def ranking(types, _model, distfn, sense_num):
     MAX_NODE_NUM = 5000  # avoid too large set (need more than 3 hour for whole noun set)
     with th.no_grad():
         lt = th.from_numpy(_model.embedding())
@@ -44,6 +44,8 @@ def ranking(types, _model, distfn):
             s_e = Variable(lt[s].expand_as(embedding), volatile=True)
             _dists = _model.dist()(s_e, embedding).data.cpu().numpy().flatten()
             _dists[s] = 1e+12
+            for i in range(sense_num, len(_dists)):
+                _dists[i] = np.Inf
             _labels = np.zeros(embedding.size(0))
             _dists_masked = _dists.copy()
             _ranks = []
@@ -86,11 +88,11 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # compute embedding quality
             log.info('Computing ranking')
             _start_time = time.time()
-            train_mrank, train_mAP = ranking(train_adj, model, distfn)
+            train_mrank, train_mAP = ranking(train_adj, model, distfn, len(data.objects))
             mrank, mAP = train_mrank, train_mAP
             test_info = ''
             if test_adj is not None:
-                test_mrank, test_mAP = ranking(test_adj, model, distfn)
+                test_mrank, test_mAP = ranking(test_adj, model, distfn, len(data.objects))
                 mrank, mAP = test_mrank, test_mAP
                 test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
             log.info(f'Computing finished. Used time: {time.time() - _start_time}')
