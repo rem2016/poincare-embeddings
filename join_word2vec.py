@@ -208,8 +208,8 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
             loss = nn.MSELoss()(dists, targets) * loss_balance
             loss.backward()
             optimizer.step(lr=lr)
-            k_param.data.add_(-lr, k.grad)
-            k.grad = None
+            k_param.data.add_(-lr, k_param.grad)
+            k_param.grad = None
             epoch_words_loss.append(loss.data.item())
 
         if rank == 1:
@@ -229,7 +229,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     f'"words_loss": {word_sim_loss}'
                     '}'
                 )
-            log.info(f'k={k_param.item()}')
+            log.info(f'k_param={k_param.item()}')
 
         if epoch >= opt.burnin * 5:
             loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
