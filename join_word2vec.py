@@ -147,12 +147,13 @@ class SNEmbeddingWithWord(EmbeddingWithWord):
         return lossfn(preds, targets)
 
 
-def calc_pair_sim(pairs):
+def calc_pair_sim(pairs, k_param):
     def _dist(v1, v2):
         return PoincareDistance()(v1, v2)
 
     def _dist2sim(d):
-         return 2 - 2 / (1 + th.exp(-d))
+        d *= k_param.expand_as(d)
+        return 2 - 2 / (1 + th.exp(-d))
 
     assert len(pairs.size()) == 3 and pairs.size(1) == 2
     return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
@@ -176,7 +177,9 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         collate_fn=data.collate
     )
 
-    loss_balance = 0.1
+    loss_balance = 1.0
+    k_param = th.Tensor([1.0])
+    k_param.requires_grad = True
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
@@ -201,10 +204,12 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         for inputs, targets in words_loader:
             elapsed = timeit.default_timer() - t_start
             optimizer.zero_grad()
-            dists = calc_pair_sim(model.embed(inputs))
+            dists = calc_pair_sim(model.embed(inputs), k_param=k_param)
             loss = nn.MSELoss()(dists, targets) * loss_balance
             loss.backward()
             optimizer.step(lr=lr)
+            k_param.data.add_(-lr, k.grad)
+            k.grad = None
             epoch_words_loss.append(loss.data.item())
 
         if rank == 1:
@@ -224,6 +229,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     f'"words_loss": {word_sim_loss}'
                     '}'
                 )
+            log.info(f'k={k_param.item()}')
 
         if epoch >= opt.burnin * 5:
             loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
