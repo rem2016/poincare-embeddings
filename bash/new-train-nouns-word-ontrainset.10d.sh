@@ -16,15 +16,15 @@ export OMP_NUM_THREADS=1
 
 python3 embed.py \
        -dim 10 \
-       -lr 2.0 \
-       -epochs 800 \
-       -negs 10 \
-       -burnin 10 \
+       -lr 1.0 \
+       -epochs 1000 \
+       -negs 50 \
+       -burnin 20 \
        -nproc "${NTHREADS}" \
        -distfn poincare \
        -dset wordnet/noun_closure.train.tsv \
        -dset_test wordnet/noun_closure.test.tsv \
        -fout model/nouns.10d.train.linkword \
-       -batchsize 40 \
+       -batchsize 50 \
        -eval_each 10 \
        -word
