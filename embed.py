@@ -288,9 +288,8 @@ if __name__ == '__main__':
         word_as_head_data = data_loader.WordAsHeadDataset(idx, objects, opt.negs, sense_num=len(objects))
         word_as_neg_data = data_loader.WordAsNegDataset(idx, objects, opt.negs, words_num=len(dwords))
     else:
-        model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects,
-                                                                              node_num=len(objects) + len(dwords)
-                                                                              if dwords is not None else 0)
+        num = len(objects) + (len(dwords) if dwords is not None else 0)
+        model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects, node_num=num)
 
     # Build config string for log
     conf = [
