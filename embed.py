@@ -238,9 +238,11 @@ if __name__ == '__main__':
     parser.add_argument('-w2v_nn', help='Use word2vec NN to map', action='store_true', default=False)
     parser.add_argument('-nn_hidden_layer', help='NN hidden layer num', type=int, default=1)
     parser.add_argument('-nn_hidden_size', help='NN hidden layer num', type=int, default=50)
+    parser.add_argument('-balance_stage', help='NN hidden layer num', type=int, default=5)
     parser.add_argument('-w2v_sim', help='Use word2vec sim to map', action='store_true', default=False)
     parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
+    parser.add_argument('-cold', help='Cold start learning embedding', action='store_true', default=False)
     opt = parser.parse_args()
 
     set_up_output_file_name(opt)
