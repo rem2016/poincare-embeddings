@@ -35,15 +35,15 @@ def random_sample(adj, num):
     return random.sample(_data, num)
 
 
-def ranking(types, _model, distfn, sense_num):
-    MAX_NODE_NUM = 5000  # avoid too large set (need more than 3 hour for whole noun set)
+def ranking(types, _model, distfn, sense_num=1000000):
+    MAX_NODE_NUM = 100  # avoid too large set (need more than 3 hour for whole noun set)
     with th.no_grad():
         lt = th.from_numpy(_model.embedding())
-        embedding = Variable(lt, volatile=True)
+        embedding = Variable(lt)
         ranks = []
         ap_scores = []
         for s, s_types in random_sample(types, MAX_NODE_NUM):
-            s_e = Variable(lt[s].expand_as(embedding), volatile=True)
+            s_e = Variable(lt[s].expand_as(embedding))
             _dists = _model.dist()(s_e, embedding).data.cpu().numpy().flatten()
             _dists[s] = 1e+12
             _labels = np.zeros(embedding.size(0))
@@ -122,7 +122,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                  '"train_mAP": %.4f, '
                  '"best_rank": %.2f, '
                  '"best_mAP": %.4f%s}') % (
-                     epoch, elapsed, loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
+                    epoch, elapsed, loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
             )
         else:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, '
@@ -135,7 +135,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                  '"mean rank": %g, '
                  '"mean rank epoch": %d'
                  '}') % (
-                     max_map[0], max_map[1], min_rank[0], min_rank[1])
+                    max_map[0], max_map[1], min_rank[0], min_rank[1])
             )
             break
 
@@ -248,9 +248,10 @@ if __name__ == '__main__':
     train_adjacency = get_adjacency_by_idx(idx)
     if opt.dset_test != '':
         test_idx, test_objects, test_dwords = slurp(opt.dset_test,
-                                               symmetrize=opt.symmetrize,
-                                               load_word=False,  # Test test set should be the same
-                                               build_word_vector=False)
+                                                    symmetrize=opt.symmetrize,
+                                                    load_word=False,  # Test test set should be the same
+                                                    build_word_vector=False,
+                                                    objects=objects)
         test_adjacency = get_adjacency_by_idx(test_idx)
 
     # setup Riemannian gradients for distances
@@ -279,14 +280,14 @@ if __name__ == '__main__':
 
     # Build config string for log
     conf = [
-        ('distfn', '"{:s}"'),
-        ('dim', '{:d}'),
-        ('lr', '{:g}'),
-        ('batchsize', '{:d}'),
-        ('negs', '{:d}'),
-        ('burnin', '{:d}'),
-        ('eval_each', '{:d}'),
-    ] + conf
+               ('distfn', '"{:s}"'),
+               ('dim', '{:d}'),
+               ('lr', '{:g}'),
+               ('batchsize', '{:d}'),
+               ('negs', '{:d}'),
+               ('burnin', '{:d}'),
+               ('eval_each', '{:d}'),
+           ] + conf
     conf = ', '.join(['"{}": {}'.format(k, f).format(getattr(opt, k)) for k, f in conf])
     log.info(f'json_conf: {{{conf}}}')
 

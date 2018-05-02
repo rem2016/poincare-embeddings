@@ -102,9 +102,19 @@ def load_all_related_words(idx, objects, enames):
     return dwords, word_vec
 
 
-def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False, build_word_vector=False):
-    ecount = count()
-    enames = ddict(ecount.__next__)
+def obj2map(objects):
+    rt = {}
+    for i, v in enumerate(objects):
+        rt[v] = i
+    return rt
+
+
+def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False, build_word_vector=False, objects=None):
+    if objects is None:
+        ecount = count()
+        enames = ddict(ecount.__next__)
+    else:
+        enames = obj2map(objects)
 
     subs = []
     for i, j, w in iter_line(fin, fparse, length=2):
@@ -115,7 +125,8 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False, build_word_v
             subs.append((enames[j], enames[i], w))
 
     # freeze defaultdicts after training data and convert to arrays
-    objects = intmap_to_list(dict(enames))
+    if objects is None:
+        objects = intmap_to_list(dict(enames))
     dwords = None
     if load_word:
         dwords, word_vec = load_all_related_words(subs, objects, enames)

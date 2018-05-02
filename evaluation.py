@@ -2,7 +2,9 @@ import torch as th
 from nltk.corpus import brown, treebank
 from nltk.corpus import wordnet as wn
 import sys
+import data
 from sematch.evaluation import WordSimEvaluation
+from model import SNEmbedding, PoincareDistance
 from nltk.stem import WordNetLemmatizer
 import numpy as np
 from numpy.linalg import norm
@@ -16,13 +18,20 @@ class Evaluator:
     ws_eval = WordSimEvaluation()
     _wn_lemma = WordNetLemmatizer()
 
-    def __init__(self, embs, objs):
-        self.synmap = self.load(embs, objs)
+    def __init__(self, embs, objs, dist=None):
+        self.synmap = None
+        self.model = None
+        self.dist = dist
+        self.embs = embs
+        self.objects = objs
+        self.test_set = None
 
     def load(self, embs, objs):
         return {wn.synset(objs[i]): emb for i, emb in enumerate(embs)}
 
     def evaluate(self, method='tanh'):
+        if self.synmap is None:
+            self.synmap = self.load(self.embs, self.objs)
         sim = lambda x, y: self.word_similarity(x, y, method)
         cors = [self.ws_eval.evaluate_metric('poincare', sim, dset_name, save_results=True) for dset_name in
                 self.data_word_noun]
@@ -84,4 +93,52 @@ class Evaluator:
     def initialize_by_file(fin):
         with open(fin, 'rb') as f:
             model = th.load(f)
-        return Evaluator(model['model']['lt.weight'], model['objects'])
+        return Evaluator(model['model']['lt.weight'], model['objects'], model['model'])
+
+    def rank(self):
+        # rank rank rank rank
+        # how to rank???
+        # OK, first ! loading the model.
+        # But it's already done ....
+        # then.. second! we can.. we can load the test set!
+        # yes... that is the point
+        # here we go!
+        self.load_test_set()
+    # excuse me ? so ???
+    # yeah, you implement that function
+    # ..... fine you win
+    # The song <The light that never come> is AWwwwwwwwwwwwwwwwwwwwwESOME
+    # Enjoy yourself.
+    # You can simply use the slurp func, dud
+
+    # I fixed a fatal bug!!!   Oh!!!!!!!!!!!!!
+        from embed import ranking
+
+        # ranking(self.test_set, self.)
+        # I ... think we should construct the model first
+        self.load_model()
+        # So easy to use. I cannot believe it
+        return ranking(self.test_set, self.model, PoincareDistance)  # Mean rank, Mean ap
+
+    def load_test_set(self):
+        if self.test_set is not None:
+            return
+        from embed import get_adjacency_by_idx
+        idx, _, _ = data.slurp('wordnet/noun_closure.train.tsv', objects=self.objects)
+        adj = get_adjacency_by_idx(idx)
+        self.test_set = adj
+
+    def load_model(self):
+        if self.model is not None:
+            return
+
+        model = SNEmbedding(
+            len(self.objects),
+            self.embs.size(1),
+            dist=PoincareDistance,
+            max_norm=1
+        )
+
+        model.load_state_dict(self.dist)
+        self.model = model
+
