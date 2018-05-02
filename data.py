@@ -117,12 +117,20 @@ def slurp(fin, fparse=parse_tsv, symmetrize=False, load_word=False, build_word_v
         enames = obj2map(objects)
 
     subs = []
+    error_count = 0
     for i, j, w in iter_line(fin, fparse, length=2):
         if i == j:
             continue
-        subs.append((enames[i], enames[j], w))
+        try:
+            subs.append((enames[i], enames[j], w))
+        except KeyError:
+            error_count += 1
+
         if symmetrize:
             subs.append((enames[j], enames[i], w))
+
+    if error_count:
+        print(f"[ERROR]: Total {error_count} nodes weren't found in the train set")
 
     # freeze defaultdicts after training data and convert to arrays
     if objects is None:
