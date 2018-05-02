@@ -28,3 +28,4 @@ python3 embed.py \
        -batchsize 50 \
        -eval_each 5 \
        -w2v_sim
+       -override

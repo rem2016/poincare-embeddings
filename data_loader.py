@@ -85,12 +85,14 @@ class SNGraphDataset(GraphDataset):
         return th.LongTensor(ix).view(1, len(ix)), th.zeros(1).long()
 
     @classmethod
-    def initialize(cls, distfn, opt, idx, objects, max_norm=1):
+    def initialize(cls, distfn, opt, idx, objects, max_norm=1, node_num=None):
+        if node_num is None:
+            node_num = len(objects)
         conf = []
         model_name = cls.model_name % (opt.dset, opt.distfn, opt.dim)
         data = cls(idx, objects, opt.negs)
         model = SNEmbedding(
-            len(data.objects),
+            node_num,
             opt.dim,
             dist=distfn,
             max_norm=max_norm
@@ -116,9 +118,10 @@ class SNGraphDataset(GraphDataset):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, word_vec: np.array, pair_per_word: int=10):
+    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=10):
         self.npair = pair_per_word
         self.word_vec = word_vec
+        self.sense_num = sense_num
         self.word_num = len(word_vec)
 
     def __getitem__(self, index):
@@ -127,7 +130,7 @@ class WordsDataset(Dataset):
         a = self.word_vec[a_index]
         b = self.word_vec[b_index]
         sim = float(np.sum(a * b) / (norm(a) * norm(b)))
-        return th.LongTensor([[a_index, b_index]]), \
+        return th.LongTensor([[a_index + self.sense_num, b_index + self.sense_num]]), \
                th.Tensor([sim]).view(1, )
 
     def __len__(self):

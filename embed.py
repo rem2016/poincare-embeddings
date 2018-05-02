@@ -13,8 +13,10 @@ import numpy as np
 import time
 import logging
 import argparse
+from threading import RLock
 from evaluation import Evaluator
 from torch.autograd import Variable
+from concurrent.futures import ThreadPoolExecutor
 from word_vec_loader import WordVectorLoader
 from collections import defaultdict as ddict
 import torch.multiprocessing as mp
@@ -35,40 +37,50 @@ def random_sample(adj, num):
     return random.sample(_data, num)
 
 
-def ranking(types, _model, distfn, sense_num=1000000):
-    MAX_NODE_NUM = 100  # avoid too large set (need more than 3 hour for whole noun set)
+def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
+    MAX_NODE_NUM = 5000  # avoid too large set (need more than 3 hour for whole noun set)
     with th.no_grad():
         lt = th.from_numpy(_model.embedding())
         embedding = Variable(lt)
         ranks = []
         ap_scores = []
-        for s, s_types in random_sample(types, MAX_NODE_NUM):
-            s_e = Variable(lt[s].expand_as(embedding))
+        lock = RLock()
+
+        def work(_s, _s_types):
+            nonlocal ranks
+            s_e = Variable(lt[_s].expand_as(embedding))
             _dists = _model.dist()(s_e, embedding).data.cpu().numpy().flatten()
-            _dists[s] = 1e+12
+            _dists[_s] = 1e+12
             _labels = np.zeros(embedding.size(0))
             _dists_masked = _dists.copy()
             _ranks = []
-            for o in s_types:
+            for o in _s_types:
                 _dists_masked[o] = np.Inf
                 _labels[o] = 1
             # Caution
             # ignore all words
             for i in range(sense_num, len(_dists)):
                 _dists_masked[i] = np.Inf
-            ap_scores.append(average_precision_score(_labels, -_dists))
-            for o in s_types:
+            for o in _s_types:
                 d = _dists_masked.copy()
                 d[o] = _dists[o]
                 r = np.argsort(d)
                 _ranks.append(np.where(r == o)[0][0] + 1)
+            ap = average_precision_score(_labels, -_dists)
+            lock.acquire()
+            ap_scores.append(ap)
             ranks += _ranks
+            lock.release()
+
+        with ThreadPoolExecutor(max_workers=max_workers) as worker:
+            for s, s_types in random_sample(types, MAX_NODE_NUM):
+                worker.submit(work, s, s_types)
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def eval_human(_model, objs):
-    ev = Evaluator(_model.embedding(), objs)
-    return ev.evaluate()
+def eval_human(_model, objs, word_index=None):
+    ev = Evaluator(_model.embedding(), objs, word_index=word_index)
+    return ev.evaluate(try_use_word=True)
 
 
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
@@ -87,7 +99,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
             log.info(f'Saving model f{_fout}')
-            log.info(str(eval_human(model, data.objects)))
+            log.info(str(eval_human(model, data.objects, WordVectorLoader.index2word)))
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,
@@ -276,7 +288,9 @@ if __name__ == '__main__':
         word_as_head_data = data_loader.WordAsHeadDataset(idx, objects, opt.negs, sense_num=len(objects))
         word_as_neg_data = data_loader.WordAsNegDataset(idx, objects, opt.negs, words_num=len(dwords))
     else:
-        model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects)
+        model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects,
+                                                                              node_num=len(objects) + len(dwords)
+                                                                              if dwords is not None else 0)
 
     # Build config string for log
     conf = [
@@ -317,7 +331,7 @@ if __name__ == '__main__':
         processes = []
         for rank in range(opt.nproc):
             if opt.w2v_sim:
-                word_data = WordsDataset(WordVectorLoader.word_vec)
+                word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects))
                 p = mp.Process(
                     target=join_word2vec.combine_w2v_sim_train,
                     args=(model, data, word_data, optimizer, opt, log, rank + 1, queue)
