@@ -118,10 +118,13 @@ class SNGraphDataset(GraphDataset):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=10):
+    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=10, threshold=0.6, max_tries=20):
         self.npair = pair_per_word
         self.word_vec = word_vec
         self.sense_num = sense_num
+        self.threshold = threshold
+        self.max_tries = max_tries
+        self.least_pos = max(self.npair // 5, 1)
         self.word_num = len(word_vec)
 
     def __getitem__(self, index):
@@ -130,6 +133,14 @@ class WordsDataset(Dataset):
         a = self.word_vec[a_index]
         b = self.word_vec[b_index]
         sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+        if index % self.npair < self.least_pos:
+            times = 0
+            while sim < self.threshold and times < self.max_tries:
+                times += 1
+                b_index = randint(0, self.word_num)
+                b = self.word_vec[b_index]
+                sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+
         return th.LongTensor([[a_index + self.sense_num, b_index + self.sense_num]]), \
                th.Tensor([sim]).view(1, )
 

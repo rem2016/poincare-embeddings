@@ -86,10 +86,16 @@ class Evaluator:
                     raise OutofdateVersionError()
 
             def sim(x, y):
-                return self.word_similarity(x, y, method, True)
+                v = self.word_similarity(x, y, method, True)
+                if isinstance(v, th.Tensor):
+                    v = float(v.item())
+                return v
         else:
             def sim(x, y):
-                return self.word_similarity(x, y, method)
+                v = self.word_similarity(x, y, method)
+                if isinstance(v, th.Tensor):
+                    v = float(v.item())
+                return v
         cors = [self.ws_eval.evaluate_metric('poincare', sim, dset_name, save_results=True) for dset_name in
                 self.data_word_noun]
         cors = {name: cor for name, cor in zip(self.data_word_noun, cors)}

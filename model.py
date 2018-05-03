@@ -99,6 +99,7 @@ class Embedding(nn.Module):
             scale_grad_by_freq=False
         )
         self.k = th.nn.Parameter(th.ones(1))
+        self.b = th.nn.Parameter(th.ones(1))
         self.dist = dist
         self.init_weights()
 
@@ -121,12 +122,24 @@ class Embedding(nn.Module):
             return PoincareDistance()(v1, v2)
 
         def _dist2sim(d):
-            d = self.k * d
-            return 2 - 2 / (1 + th.exp(-d))
+            d = self.k * d + self.b
+            return - th.tanh(d)
 
         pairs = self.embed(inputs)
-        assert len(pairs.size()) == 3 and pairs.size(1) == 2
+        try:
+            assert len(pairs.size()) == 3 and pairs.size(1) == 2
+        except AssertionError as e:
+            print(inputs)
+            raise e
         return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
+
+    def update_kb(self, lr):
+        self.k.data = self.k - lr * self.k.grad
+        self.b.data = self.b - lr * self.b.grad
+
+    def zero_grad_kb(self):
+        self.k.grad = None
+        self.b.grad = None
 
 
 class SNEmbedding(Embedding):

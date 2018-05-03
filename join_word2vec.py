@@ -205,13 +205,13 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
         for inputs, targets in words_loader:
             elapsed = timeit.default_timer() - t_start
-            model.k.data.grad = None
+            model.zero_grad_kb()
             optimizer.zero_grad()
             dists = model.calc_pair_sim(inputs)
             loss = nn.MSELoss()(dists, targets) * loss_balance
             loss.backward()
             optimizer.step(lr=lr)
-            model.k.data = model.k - lr * model.k.grad
+            model.update_kb(lr=lr)
             epoch_words_loss.append(loss.data.item())
 
         if rank == 1:

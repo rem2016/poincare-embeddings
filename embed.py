@@ -316,10 +316,6 @@ def start_predicting(opt, log, debug=False):
         lr=opt.lr,
     )
 
-    optimizer_sim = th.optim.SparseAdam(
-        _model.parameters(),
-    )
-
     if opt.nproc == 0:
         handler = train.SingleThreadHandler(log, train_adjacency, test_adjacency, data, opt.fout, distfn, ranking)
         if opt.w2v_sim:
@@ -343,6 +339,7 @@ def start_predicting(opt, log, debug=False):
         processes = []
         for rank in range(opt.nproc):
             if opt.w2v_sim:
+                print('sim')
                 word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects))
                 p = concurrent_method(
                     target=join_word2vec.combine_w2v_sim_train,
