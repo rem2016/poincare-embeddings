@@ -134,6 +134,7 @@ class Embedding(nn.Module):
         return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
 
     def update_kb(self, lr):
+        lr *= 0.01
         self.k.data = self.k - lr * self.k.grad
         self.b.data = self.b - lr * self.b.grad
 
