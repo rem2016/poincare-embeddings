@@ -134,9 +134,9 @@ class Embedding(nn.Module):
 
     def update_kb(self, lr):
         lr = 0.01 * lr
-        if self.k.grad is not None:
+        if self.k.grad is not None and not th.isnan(self.k.grad):
             self.k.data = self.k - lr * self.k.grad
-        if self.b.grad is not None:
+        if self.b.grad is not None and not th.isnan(self.b.grad):
             self.b.data = self.b - lr * self.b.grad
 
     def zero_grad_kb(self):
