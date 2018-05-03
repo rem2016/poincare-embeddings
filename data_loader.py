@@ -134,6 +134,8 @@ class WordsDataset(Dataset):
                th.Tensor([sim]).view(1, )
 
     def __len__(self):
+        if self.npair > self.word_num:
+            return self.word_num ** 2
         return self.word_num * self.npair
 
 

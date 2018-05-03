@@ -12,6 +12,7 @@ import os
 import numpy as np
 import time
 import logging
+import threading
 import argparse
 from threading import RLock
 from evaluation import Evaluator
@@ -47,6 +48,9 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
         lock = RLock()
 
         def work(_s, _s_types):
+            if _s >= sense_num:
+                return
+
             nonlocal ranks
             s_e = Variable(lt[_s].expand_as(embedding))
             _dists = _model.dist()(s_e, embedding).data.cpu().numpy().flatten()
@@ -106,6 +110,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                 'objects': data.objects,
                 'word_index': WordVectorLoader.index2word
             }, _fout)
+            th.save(model, f'{fout}/{epoch}.model')
 
             # TODO if any error occurs here, refactor
             # compute embedding quality
@@ -152,18 +157,14 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             break
 
 
-def setup_log(opt):
+def setup_log(opt, need_file=True):
     if opt.debug:
         log_level = logging.DEBUG
     else:
         log_level = logging.INFO
-    log_file = f'{opt.fout}/log.log'
+
     log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s (%(lineno)d) %(message)s',
                                       datefmt='%H:%M:%S')
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(log_formatter)
-    file_handler.setLevel(log_level)
-
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(log_formatter)
     stream_handler.setLevel(log_level)
@@ -171,7 +172,12 @@ def setup_log(opt):
     log = logging.getLogger('poincare-nips17')
     log.setLevel(log_level)
 
-    log.addHandler(file_handler)
+    if need_file:
+        log_file = f'{opt.fout}/log.log'
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(log_formatter)
+        file_handler.setLevel(log_level)
+        log.addHandler(file_handler)
     log.addHandler(stream_handler)
     return log
 
@@ -218,14 +224,14 @@ def get_adjacency_by_idx(_idx):
     return _adjacency
 
 
-if __name__ == '__main__':
+def parse_opt(debug=False):
     parser = argparse.ArgumentParser(description='Train Poincare Embeddings')
-    parser.add_argument('-dim', help='Embedding dimension', type=int)
+    parser.add_argument('-dim', help='Embedding dimension', type=int, default=10)
     parser.add_argument('-dset', help='Dataset to embed', type=str)
     parser.add_argument('-dset_test', help='Dataset to test', type=str, default='')
     parser.add_argument('-fout', help='Filename where to store model', type=str)
-    parser.add_argument('-distfn', help='Distance function', type=str)
-    parser.add_argument('-lr', help='Learning rate', type=float)
+    parser.add_argument('-distfn', help='Distance function', type=str, default='poincare')
+    parser.add_argument('-lr', help='Learning rate', type=float, default=1.0)
     parser.add_argument('-epochs', help='Number of epochs', type=int, default=200)
     parser.add_argument('-batchsize', help='Batchsize', type=int, default=50)
     parser.add_argument('-negs', help='Number of negatives', type=int, default=20)
@@ -243,21 +249,17 @@ if __name__ == '__main__':
     parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     parser.add_argument('-cold', help='Cold start learning embedding', action='store_true', default=False)
-    opt = parser.parse_args()
+    if debug:
+        return parser.parse_args([])
+    return parser.parse_args()
 
-    set_up_output_file_name(opt)
+
+def start_predicting(opt, log, debug=False):
     th.set_default_tensor_type('torch.FloatTensor')
-    log = setup_log(opt)
-    log.info("======================================")
-
-    log.info("Config")
-    log.info(str(opt))
-
+    # setup data
     idx, objects, dwords = slurp(opt.dset, symmetrize=opt.symmetrize,
                                  load_word=opt.w2v_nn or opt.w2v_sim or opt.word,
                                  build_word_vector=True)
-
-    # create adjacency list for evaluation
     test_adjacency = None
     train_adjacency = get_adjacency_by_idx(idx)
     if opt.dset_test != '':
@@ -286,12 +288,12 @@ if __name__ == '__main__':
     word_as_head_data = None
     word_as_neg_data = None
     if opt.w2v_nn:
-        model, data, model_name, conf = data_loader.SNGraphDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
+        _model, data, model_name, conf = data_loader.SNGraphDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
         word_as_head_data = data_loader.WordAsHeadDataset(idx, objects, opt.negs, sense_num=len(objects))
         word_as_neg_data = data_loader.WordAsNegDataset(idx, objects, opt.negs, words_num=len(dwords))
     else:
         num = len(objects) + (len(dwords) if dwords is not None else 0)
-        model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects, node_num=num)
+        _model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects, node_num=num)
 
     # Build config string for log
     conf = [
@@ -308,49 +310,74 @@ if __name__ == '__main__':
 
     # initialize optimizer
     optimizer = RiemannianSGD(
-        model.parameters(),
+        _model.parameters(),
         rgrad=opt.rgrad,
         retraction=opt.retraction,
         lr=opt.lr,
     )
 
+    optimizer_sim = th.optim.SparseAdam(
+        _model.parameters(),
+    )
+
     if opt.nproc == 0:
         handler = train.SingleThreadHandler(log, train_adjacency, test_adjacency, data, opt.fout, distfn, ranking)
         if opt.w2v_sim:
-            train.single_thread_train(model, data, optimizer, opt, log,
+            train.single_thread_train(_model, data, optimizer, opt, log,
                                       handler,
-                                      words_data=WordsDataset(WordVectorLoader.word_vec),
+                                      words_data=WordsDataset(WordVectorLoader.word_vec, WordVectorLoader.sense_num),
                                       w_head_data=word_as_head_data,
                                       w_neg_data=word_as_neg_data)
         else:
-            train.single_thread_train(model, data, optimizer, opt, log, handler,
+            train.single_thread_train(_model, data, optimizer, opt, log, handler,
                                       w_head_data=word_as_head_data,
                                       w_neg_data=word_as_neg_data)
+        if not debug:
+            raise NotImplemented()
     else:
+        concurrent_method = mp.Process
+        if debug:
+            concurrent_method = threading.Thread
         queue = mp.Manager().Queue()
-        model.share_memory()
+        _model.share_memory()
         processes = []
         for rank in range(opt.nproc):
             if opt.w2v_sim:
                 word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects))
-                p = mp.Process(
+                p = concurrent_method(
                     target=join_word2vec.combine_w2v_sim_train,
-                    args=(model, data, word_data, optimizer, opt, log, rank + 1, queue)
+                    args=(_model, data, word_data, optimizer, opt, log, rank + 1, queue)
                 )
             else:
-                p = mp.Process(
+                p = concurrent_method(
                     target=train.train_mp,
-                    args=(model, data, optimizer, opt, log, rank + 1,
+                    args=(_model, data, optimizer, opt, log, rank + 1,
                           queue, word_as_head_data, word_as_neg_data)
                 )
             p.start()
             processes.append(p)
 
-        ctrl = mp.Process(
-            target=control,
-            args=(
-                queue, log, train_adjacency, test_adjacency, data, opt.fout,
-                distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
-        )
-        ctrl.start()
-        ctrl.join()
+        control_params = (queue, log, train_adjacency, test_adjacency, data,
+                          opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
+        if not debug:
+            ctrl = mp.Process(
+                target=control,
+                args=control_params
+            )
+            ctrl.start()
+            ctrl.join()
+        return control_params
+
+
+def main():
+    opt = parse_opt()
+    set_up_output_file_name(opt)
+    log = setup_log(opt)
+    log.info("======================================")
+    log.info("Config")
+    log.info(str(opt))
+    start_predicting(opt, log)
+
+
+if __name__ == '__main__':
+    main()

@@ -4,3 +4,4 @@ model/
 .idea/
 .vscode/
 experiment/
+.ipynb_checkpoints/

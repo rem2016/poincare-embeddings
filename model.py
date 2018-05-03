@@ -98,6 +98,7 @@ class Embedding(nn.Module):
             sparse=True,
             scale_grad_by_freq=False
         )
+        self.k = th.nn.Parameter(th.ones(1))
         self.dist = dist
         self.init_weights()
 
@@ -114,6 +115,18 @@ class Embedding(nn.Module):
 
     def embed(self, inputs):
         return self.lt(inputs)
+
+    def calc_pair_sim(self, inputs):
+        def _dist(v1, v2):
+            return PoincareDistance()(v1, v2)
+
+        def _dist2sim(d):
+            d = self.k * d
+            return 2 - 2 / (1 + th.exp(-d))
+
+        pairs = self.embed(inputs)
+        assert len(pairs.size()) == 3 and pairs.size(1) == 2
+        return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
 
 
 class SNEmbedding(Embedding):

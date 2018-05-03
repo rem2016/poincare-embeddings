@@ -147,12 +147,12 @@ class SNEmbeddingWithWord(EmbeddingWithWord):
         return lossfn(preds, targets)
 
 
-def calc_pair_sim(pairs, k_param):
+def calc_pair_sim(pairs, ll):
     def _dist(v1, v2):
         return PoincareDistance()(v1, v2)
 
     def _dist2sim(d):
-        d *= k_param.expand_as(d)
+        d = ll(d)
         return 2 - 2 / (1 + th.exp(-d))
 
     assert len(pairs.size()) == 3 and pairs.size(1) == 2
@@ -171,7 +171,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
     words_loader = DataLoader(
         words_data,
-        batch_size=opt.batchsize,
+        batch_size=100,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=data.collate
@@ -180,8 +180,6 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
     loss_balance = 1.0
     if opt.cold:
         loss_balance *= 0.1
-    k_param = th.Tensor([1.0])
-    k_param.requires_grad = True
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
@@ -207,13 +205,13 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
         for inputs, targets in words_loader:
             elapsed = timeit.default_timer() - t_start
+            model.k.data.grad = None
             optimizer.zero_grad()
-            dists = calc_pair_sim(model.embed(inputs), k_param=k_param)
+            dists = model.calc_pair_sim(inputs)
             loss = nn.MSELoss()(dists, targets) * loss_balance
             loss.backward()
             optimizer.step(lr=lr)
-            k_param.data.add_(-lr, k_param.grad)
-            k_param.grad = None
+            model.k.data = model.k - lr * model.k.grad
             epoch_words_loss.append(loss.data.item())
 
         if rank == 1:
@@ -233,7 +231,9 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     f'"words_loss": {word_sim_loss}'
                     '}'
                 )
-            log.info(f'k_param={k_param.item()}')
+            log.info('info: {'
+                     f'"k": {model.k.item()}'
+                     '}')
 
         if epoch >= opt.burnin * opt.balance_stage:
             loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)

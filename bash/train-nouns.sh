@@ -23,6 +23,6 @@ python3 embed.py \
        -nproc "${NTHREADS}" \
        -distfn poincare \
        -dset wordnet/noun_closure.tsv \
-       -fout nouns.pth \
+       -fout model/53nouns \
        -batchsize 50 \
        -eval_each 100 \

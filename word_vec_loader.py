@@ -28,11 +28,12 @@ class WordVectorLoader:
     @classmethod
     def build(cls, dwords, word_vec):
         cls.sense_num = min(dwords.values())
-        index2word = [None] * len(dwords)
+        index2word = [None] * (max(dwords.values()) + 1)
         for word, i in dwords.items():
             index2word[i] = word
 
-        assert all((x is not None for x in index2word))
+        assert all((index2word[i] is None for i in range(cls.sense_num)))
+        assert all((index2word[i] is not None for i in range(cls.sense_num, len(index2word))))
         cls.embeddings = from_pretrained(th.Tensor(word_vec), True)
         cls.index2word = index2word
         cls.word2index = dwords
@@ -47,7 +48,7 @@ class WordVectorLoader:
 
     @classmethod
     def get_vec_by_word(cls, w):
-        return cls.word_vec[WordVectorLoader.word2index[w]]
+        return cls.word_vec[WordVectorLoader.word2index[w] - cls.sense_num]
 
     @classmethod
     def get_vec_by_index(cls, i):

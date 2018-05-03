@@ -20,13 +20,21 @@ mapping_methods = {
 }
 
 
+class NoExistError(ValueError):
+    pass
+
+
+class OutofdateVersionError(ValueError):
+    pass
+
+
 class Evaluator:
     data_word_noun = ['noun_rg', 'noun_mc', 'noun_ws353', 'noun_ws353-sim', 'noun_simlex']
     sim_methods_noun = ['path', 'lch', 'wup', 'li', 'res', 'lin', 'jcn', 'wpath']
     ws_eval = WordSimEvaluation()
     _wn_lemma = WordNetLemmatizer()
 
-    def __init__(self, embs, objs, dict=None, word_index=None):
+    def __init__(self, embs, objs, dict=None, word_index=None, k=None):
         """
 
         :param embs: Embedding
@@ -34,6 +42,10 @@ class Evaluator:
         :param dict: model dict_state
         :param word_index: index -> word (start from 0)
         """
+        self.failed_times = 0
+        if k is None:
+            k = 12
+        self.k = k
         self.synmap = None
         self.model = None
         self.dict_state = dict
@@ -51,29 +63,31 @@ class Evaluator:
             return
 
         word2vec = {}
-        for i, name in enumerate(self.word_index):
-            word2vec[name] = self.embs[i + len(self.objects)]
+        for i, name in enumerate(self.word_index[len(self.objects):], len(self.objects)):
+            word2vec[name] = self.embs[i]
 
         self.word2vec = word2vec
 
     def evaluate(self, method='tanh', is_word_level=False, try_use_word=False):
+        self.failed_times = 0
         if try_use_word:
             if self.word_index is not None:
                 is_word_level = True
                 print('Word Level')
             else:
                 print('Sense Level')
-
+        if self.synmap is None:
+            self.synmap = self.load(self.embs, self.objects)
         if is_word_level:
             if self.word2vec is None:
-                self.load_wordvec()
+                try:
+                    self.load_wordvec()
+                except Exception:
+                    raise OutofdateVersionError()
 
             def sim(x, y):
                 return self.word_similarity(x, y, method, True)
         else:
-            if self.synmap is None:
-                self.synmap = self.load(self.embs, self.objects)
-
             def sim(x, y):
                 return self.word_similarity(x, y, method)
         cors = [self.ws_eval.evaluate_metric('poincare', sim, dset_name, save_results=True) for dset_name in
@@ -87,11 +101,19 @@ class Evaluator:
             s1 = self.word2synset(w1)
             s2 = self.word2synset(w2)
             return self.max_synset_similarity(s1, s2, self.syn_similarity_gen(method))
-        return mapping_methods[method](self.word_dist(w1, w2))
+        try:
+            dist = self.word_dist(w1, w2) * self.k
+            return mapping_methods[method](dist)
+        except NoExistError:
+            self.failed_times += 1
+            return 0
+            s1 = self.word2synset(w1)
+            s2 = self.word2synset(w2)
+            return self.max_synset_similarity(s1, s2, self.syn_similarity_gen(method))
 
     def word_dist(self, w1, w2):
         if w1 not in self.word2vec or w2 not in self.word2vec:
-            return 0.
+            raise NoExistError()
         return self.get_dist(self.word2vec[w1], self.word2vec[w2])
 
     def syn_similarity(self, s1, s2):
@@ -117,10 +139,10 @@ class Evaluator:
         return wn.synsets(word, pos)
 
     def get_dist(self, v1, v2):
-        s = norm((v1 - v2)) ** 2
-        m = (1 - norm(v1) ** 2) * (1 - norm(v2) ** 2)
-        ans = np.arccosh(1 + 2 * s / m)
-        return ans
+        if isinstance(v1, np.ndarray):
+            v1 = th.from_numpy(v1)
+            v2 = th.from_numpy(v2)
+        return PoincareDistance()(v1, v2)
 
     def max_synset_similarity(self, syns1, syns2, sim_metric):
         """
@@ -133,10 +155,10 @@ class Evaluator:
         return max([sim_metric(c1, c2) for c1 in syns1 for c2 in syns2] + [0])
 
     @staticmethod
-    def initialize_by_file(fin):
+    def initialize_by_file(fin, k=None):
         with open(fin, 'rb') as f:
             model = th.load(f)
-        return Evaluator(model['model']['lt.weight'], model['objects'], model['model'], model.get('word_index', None))
+        return Evaluator(model['model']['lt.weight'], model['objects'], model['model'], model.get('word_index', None), k=k)
 
     def rank(self):
         # rank rank rank rank

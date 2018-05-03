@@ -27,5 +27,5 @@ python3 embed.py \
        -fout model/mammals.10d.train \
        -batchsize 50 \
        -eval_each 5 \
-       -w2v_sim
+       -w2v_sim \
        -override

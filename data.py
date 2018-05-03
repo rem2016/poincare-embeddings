@@ -93,7 +93,7 @@ def load_all_related_words(idx, objects, enames):
         vector = token.vector
         if np.sum(np.abs(vector)) < 1e-5:
             continue
-        dwords[word] = len(word_vec)
+        dwords[word] = len(word_vec) + len(objects)
         word_vec.append(vector)
 
     add_words_to_graph()
