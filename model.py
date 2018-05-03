@@ -99,7 +99,7 @@ class Embedding(nn.Module):
             scale_grad_by_freq=False
         )
         self.k = th.nn.Parameter(th.ones(1))
-        self.b = th.nn.Parameter(th.ones(1))
+        self.b = th.nn.Parameter(th.ones(1) * -3)
         self.dist = dist
         self.init_weights()
 
@@ -122,8 +122,7 @@ class Embedding(nn.Module):
             return PoincareDistance()(v1, v2)
 
         def _dist2sim(d):
-            d = self.k * d + self.b
-            return - th.tanh(d)
+            return 2 / (1 + d * k) - 1
 
         pairs = self.embed(inputs)
         try:
@@ -134,9 +133,11 @@ class Embedding(nn.Module):
         return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
 
     def update_kb(self, lr):
-        lr *= 0.01
-        self.k.data = self.k - lr * self.k.grad
-        self.b.data = self.b - lr * self.b.grad
+        lr = 0.01 * lr
+        if self.k.grad is not None:
+            self.k.data = self.k - lr * self.k.grad
+        if self.b.grad is not None:
+            self.b.data = self.b - lr * self.b.grad
 
     def zero_grad_kb(self):
         self.k.grad = None
