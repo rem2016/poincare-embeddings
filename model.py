@@ -122,7 +122,7 @@ class Embedding(nn.Module):
             return PoincareDistance()(v1, v2)
 
         def _dist2sim(d):
-            return 2 / (1 + d * k) - 1
+            return 2 / (1 + d * self.k) - 1
 
         pairs = self.embed(inputs)
         try:
