@@ -131,8 +131,8 @@ class Embedding(nn.Module):
         def norm(v):
             return th.sqrt(th.sum(v**2, -1))
 
-        v = th.sum(v1 * v2, dim=-1) / (norm(v1) * norm(v2))
-        return v.squeeze(-1)
+        ret = th.sum(v1 * v2, dim=-1) / (norm(v1) * norm(v2))
+        return ret.squeeze(-1)
 
     def calc_pair_sim(self, inputs, mapping_func=''):
         """

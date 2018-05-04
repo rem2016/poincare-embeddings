@@ -6,6 +6,7 @@ if [ -z "$NTHREADS" ]; then
 fi
 
 echo "Using $NTHREADS threads"
+echo "Imbalance learning mode"
 
 # make sure OpenMP doesn't interfere with pytorch.multiprocessing
 export OMP_NUM_THREADS=1
@@ -24,9 +25,10 @@ python3 embed.py \
        -distfn poincare \
        -dset wordnet/mammal_closure.train.tsv \
        -dset_test wordnet/mammal_closure.test.tsv \
-       -fout model/mammals.cos.10d.train \
+       -fout model/mammals.cos.imb.10d.train \
        -batchsize 50 \
        -eval_each 5 \
        -w2v_sim \
        -mapping_func cos \
+       -nobalance \
        -override

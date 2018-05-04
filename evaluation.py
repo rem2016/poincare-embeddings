@@ -34,13 +34,13 @@ class Evaluator:
     ws_eval = WordSimEvaluation()
     _wn_lemma = WordNetLemmatizer()
 
-    def __init__(self, embs, objs, dict=None, word_index=None, k=None):
+    def __init__(self, embs, objs, dict=None, index2word=None, k=None):
         """
 
         :param embs: Embedding
         :param objs: index -> sense
         :param dict: model dict_state
-        :param word_index: index -> word (start from 0)
+        :param index2word: index -> word (start from 0)
         """
         self.failed_times = 0
         if k is None:
@@ -49,7 +49,7 @@ class Evaluator:
         self.synmap = None
         self.model = None
         self.dict_state = dict
-        self.word_index = word_index
+        self.index2word = index2word
         self.embs = embs
         self.objects = objs
         self.word2vec = None
@@ -63,7 +63,7 @@ class Evaluator:
             return
 
         word2vec = {}
-        for i, name in enumerate(self.word_index[len(self.objects):], len(self.objects)):
+        for i, name in enumerate(self.index2word[len(self.objects):], len(self.objects)):
             word2vec[name] = self.embs[i]
 
         self.word2vec = word2vec
@@ -71,7 +71,7 @@ class Evaluator:
     def evaluate(self, method='tanh', is_word_level=False, try_use_word=False):
         self.failed_times = 0
         if try_use_word:
-            if self.word_index is not None:
+            if self.index2word is not None:
                 is_word_level = True
                 print('Word Level')
             else:

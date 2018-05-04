@@ -82,9 +82,9 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def eval_human(_model, objs, word_index=None):
-    ev = Evaluator(_model.embedding(), objs, word_index=word_index)
-    return ev.evaluate(try_use_word=True)
+def eval_human(_model, objs, index2word=None, use_word=False):
+    ev = Evaluator(_model.embedding(), objs, index2word=index2word)
+    return ev.evaluate(try_use_word=use_word)
 
 
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
@@ -103,7 +103,9 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
             log.info(f'Saving model f{_fout}')
-            log.info(str(eval_human(model, data.objects, WordVectorLoader.index2word)))
+            log.info('Synset: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=False)))
+            if w2v_nn or w2v_sim:
+                log.info('Word: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=True)))
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,
@@ -191,6 +193,8 @@ def set_up_output_file_name(opt):
         opt.fout += '_sym'
     if opt.mapping_func == 'cos':
         opt.fout += '_cos'
+    if opt.nobalance:
+        opt.fout += '_imb'
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
     if os.path.exists(opt.fout):
         if opt.override:
@@ -251,6 +255,7 @@ def parse_opt(debug=False):
     parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     parser.add_argument('-cold', help='Cold start learning embedding', action='store_true', default=False)
+    parser.add_argument('-nobalance', help='do not use balance in sim', action='store_true', default=False)
     parser.add_argument('-mapping_func', help='Used in sim', type=str, default='reciprocal')
     if debug:
         return parser.parse_args([])

@@ -235,8 +235,9 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                      f'"k": {model.k.item()}'
                      '}')
 
-        if epoch >= opt.burnin * opt.balance_stage:
-            loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
-            if rank == 1:
-                log.info(f'Loss balance: {loss_balance}')
+        if not opt.nobalance:
+            if epoch >= opt.burnin * opt.balance_stage:
+                loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
+                if rank == 1:
+                    log.info(f'Loss balance: {loss_balance}')
         gc.collect()

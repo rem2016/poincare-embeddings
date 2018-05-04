@@ -1,5 +1,7 @@
 import numpy as np
 from numpy.random import choice, randint
+import random
+import copy
 import torch as th
 from model import SNEmbedding
 from torch import nn
@@ -117,37 +119,67 @@ class SNGraphDataset(GraphDataset):
         return model, data, model_name, conf
 
 
+def is_good_sim(sim):
+    # return sim < -0.2 or sim > 0.3  # total 5%
+    return sim < -0.1 or sim > 0.2  # total 20%
+
+
+def is_perfect_sim(sim):
+    return sim < -0.25 or sim > 0.4  # total 1%
+
+
 class WordsDataset(Dataset):
-    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=10, threshold=0.6, max_tries=20):
+    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=1000, threshold=0.6, max_tries=20):
         self.npair = pair_per_word
-        self.word_vec = word_vec
+        self.word_vec = copy.deepcopy(word_vec)
         self.sense_num = sense_num
         self.threshold = threshold
         self.max_tries = max_tries
         self.least_pos = max(self.npair // 5, 1)
         self.word_num = len(word_vec)
+        self.valid_index = []
+        self.adj = [set() for _ in range(len(self.word_vec))]
+        self.init_adj()
+
+    def __calc_dist(self, index_a, index_b):
+        a = self.word_vec[index_a]
+        b = self.word_vec[index_b]
+        sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+        return sim
 
     def __getitem__(self, index):
-        a_index = index // self.npair
-        b_index = randint(0, self.word_num)
-        a = self.word_vec[a_index]
-        b = self.word_vec[b_index]
-        sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+        a_index = self.valid_index[index % len(self.valid_index)]
+        b_index = self.valid_index[randint(0, len(self.valid_index) - 1)]
+        sim = self.__calc_dist(a_index, b_index)
         if index % self.npair < self.least_pos:
             times = 0
-            while sim < self.threshold and times < self.max_tries:
+            while not is_good_sim(sim) and times < self.max_tries:
                 times += 1
-                b_index = randint(0, self.word_num)
-                b = self.word_vec[b_index]
-                sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+                if times == self.max_tries and len(self.adj[a_index]):
+                    b_index = random.sample(self.adj[a_index], 1)[0]
+                else:
+                    b_index = random.sample(self.valid_index, 1)[0]
+                sim = self.__calc_dist(a_index, b_index)
+
+        if is_perfect_sim(sim):
+            self.adj[a_index].add(b_index)
+            self.adj[b_index].add(a_index)
 
         return th.LongTensor([[a_index + self.sense_num, b_index + self.sense_num]]), \
                th.Tensor([sim]).view(1, )
 
+    def init_adj(self):
+        print("Init word2vec adj... This gonna take a while")
+        for i in range(len(self.word_vec)):
+            v = self.word_vec[i]
+            if norm(v) < 1e-7:
+                continue
+            self.valid_index.append(i)
+
     def __len__(self):
         if self.npair > self.word_num:
             return self.word_num ** 2
-        return self.word_num * self.npair
+        return len(self.valid_index) * self.npair
 
 
 class WordAsHeadDataset(GraphDataset):
