@@ -129,57 +129,62 @@ def is_perfect_sim(sim):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=1000, threshold=0.6, max_tries=20):
+    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=100, threshold=0.6, max_tries=10, max_pairs=200):
         self.npair = pair_per_word
-        self.word_vec = copy.deepcopy(word_vec)
+        self.word_vec = np.array(word_vec)
         self.sense_num = sense_num
         self.threshold = threshold
         self.max_tries = max_tries
         self.least_pos = max(self.npair // 5, 1)
         self.word_num = len(word_vec)
         self.valid_index = []
-        self.adj = [set() for _ in range(len(self.word_vec))]
+        self.max_pairs = max_pairs
+        self.adj = [{} for _ in range(len(self.word_vec))]
         self.init_adj()
 
-    def __calc_dist(self, index_a, index_b):
-        a = self.word_vec[index_a]
-        b = self.word_vec[index_b]
-        sim = float(np.sum(a * b) / (norm(a) * norm(b)))
+    def __calc_dist(self, a, b):
+        sim = np.sum(a * b, axis=-1) / (norm(a, axis=-1) * norm(b, axis=-1))
         return sim
 
     def __getitem__(self, index):
-        a_index = self.valid_index[index % len(self.valid_index)]
-        b_index = self.valid_index[randint(0, len(self.valid_index) - 1)]
-        sim = self.__calc_dist(a_index, b_index)
-        if index % self.npair < self.least_pos:
-            times = 0
-            while not is_good_sim(sim) and times < self.max_tries:
-                times += 1
-                if times == self.max_tries and len(self.adj[a_index]):
-                    b_index = random.sample(self.adj[a_index], 1)[0]
-                else:
-                    b_index = random.sample(self.valid_index, 1)[0]
-                sim = self.__calc_dist(a_index, b_index)
+        b_indexes = list(np.random.choice(self.word_num, self.npair))
+        a_v = np.expand_dims(self.word_vec[index], 0)
+        b_vs = self.word_vec[b_indexes]
+        sim = list(self.__calc_dist(a_v, b_vs))
+        for i, v in enumerate(sim):
+            if is_perfect_sim(v):
+                self.adj[index][b_indexes[i]] = v
+                self.adj[b_indexes[i]][index] = v
 
-        if is_perfect_sim(sim):
-            self.adj[a_index].add(b_index)
-            self.adj[b_index].add(a_index)
-
-        return th.LongTensor([[a_index + self.sense_num, b_index + self.sense_num]]), \
-               th.Tensor([sim]).view(1, )
+        if len(self.adj[index]):
+            adj_num = self.max_pairs - self.npair
+            if len(self.adj[index]) > adj_num:
+                used = set(np.random.choice(len(self.adj[index]), adj_num))
+                for i, (b_index, _sim) in enumerate(self.adj[index].items()):
+                    if i in used and b_index not in b_indexes:
+                        b_indexes.append(b_index)
+                        sim.append(_sim)
+            else:
+                b_indexes.extend(self.adj[index].keys())
+                sim.extend(self.adj[index].values())
+        return th.LongTensor([[index, b_index] for b_index in b_indexes]), \
+               th.Tensor(sim)
 
     def init_adj(self):
-        print("Init word2vec adj... This gonna take a while")
         for i in range(len(self.word_vec)):
             v = self.word_vec[i]
-            if norm(v) < 1e-7:
+            if norm(v).item() < 1e-7:
                 continue
             self.valid_index.append(i)
 
+    def calc_word_average_adj(self):
+        num = 0
+        for d in self.adj:
+            num += len(d)
+        return num / len(self.adj)
+
     def __len__(self):
-        if self.npair > self.word_num:
-            return self.word_num ** 2
-        return len(self.valid_index) * self.npair
+        return self.word_num
 
 
 class WordAsHeadDataset(GraphDataset):

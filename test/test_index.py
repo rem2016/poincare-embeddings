@@ -1,8 +1,10 @@
 import data
 from nltk.corpus import wordnet as wn
 from collections import Counter, defaultdict
-from word_vec_loader import WordVectorLoader
 import evaluation
+
+
+from word_vec_loader import WordVectorLoader
 
 
 def clear():
