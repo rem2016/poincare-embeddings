@@ -195,25 +195,40 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         elif epoch == opt.burnin:
             loss_balance = 1.0
 
-        for inputs, targets in loader:
-            optimizer.zero_grad()
-            preds = model(inputs)
-            loss = model.loss(preds, targets, size_average=True)
-            loss.backward()
-            optimizer.step(lr=lr)
-            epoch_loss.append(loss.data.item())
+        node_iter = iter(loader)
+        word_iter = iter(words_loader)
+        i = 0
+        alive = 3
+        while alive:
+            i = 1 - i
+            if i == 0:
+                v = next(node_iter, None)
+                if v is None:
+                    alive &= 1
+                    continue
+                inputs, targets = v
+                optimizer.zero_grad()
+                preds = model(inputs)
+                loss = model.loss(preds, targets, size_average=True)
+                loss.backward()
+                optimizer.step(lr=lr)
+                epoch_loss.append(loss.data.item())
+            else:
+                v = next(word_iter, None)
+                if v is None:
+                    alive &= 2
+                    continue
+                inputs, targets = v
+                model.zero_grad_kb()
+                optimizer.zero_grad()
+                dists = model.calc_pair_sim(inputs, opt.mapping_func)
+                loss = nn.MSELoss()(dists, targets) * loss_balance
+                loss.backward()
+                optimizer.step(lr=lr)
+                model.update_kb(lr=lr)
+                epoch_words_loss.append(loss.data.item())
 
-        for inputs, targets in words_loader:
-            elapsed = timeit.default_timer() - t_start
-            model.zero_grad_kb()
-            optimizer.zero_grad()
-            dists = model.calc_pair_sim(inputs, opt.mapping_func)
-            loss = nn.MSELoss()(dists, targets) * loss_balance
-            loss.backward()
-            optimizer.step(lr=lr)
-            model.update_kb(lr=lr)
-            epoch_words_loss.append(loss.data.item())
-
+        elapsed = timeit.default_timer() - t_start
         if rank == 1:
             word_sim_loss = np.mean(epoch_words_loss) if len(epoch_words_loss) else None
             emb = None
