@@ -124,14 +124,15 @@ class Embedding(nn.Module):
         def _dist2sim(d):
             return 2 / (1 + d) - 1
 
-        return _dist2sim(_dist()).squeeze()
+        return _dist2sim(_dist()).squeeze(-1)
 
     @staticmethod
     def __cos_sim(v1, v2):
         def norm(v):
-            return th.sqrt(th.sum(v**2))
+            return th.sqrt(th.sum(v**2, -1))
 
-        return th.sum(v1 * v2) / (norm(v1) * norm(v2))
+        v = th.sum(v1 * v2, dim=-1) / (norm(v1) * norm(v2))
+        return v.squeeze(-1)
 
     def calc_pair_sim(self, inputs, mapping_func=''):
         """
