@@ -212,3 +212,72 @@ Traceback (most recent call last):
   File "/home/chen/anaconda3/lib/python3.6/multiprocessing/connection.py", line 368, in _send
     n = write(self._handle, buf)
 BrokenPipeError: [Errno 32] Broken pipe
+07:14:02 ERROR train_mp (33) [Errno 22] Invalid argument
+Traceback (most recent call last):
+  File "/mnt/c/Users/Administrator/Documents/G/poincare-embeddings/train.py", line 31, in train_mp
+    train(model, data, optimizer, opt, log, rank, queue, w_head, w_neg)
+  File "/mnt/c/Users/Administrator/Documents/G/poincare-embeddings/train.py", line 89, in train
+    for inputs, targets in _loader:
+  File "/home/chen/anaconda3/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 451, in __iter__
+    return _DataLoaderIter(self)
+  File "/home/chen/anaconda3/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 239, in __init__
+    w.start()
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/process.py", line 105, in start
+    self._popen = self._Popen(self)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/context.py", line 223, in _Popen
+    return _default_context.get_context().Process._Popen(process_obj)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/context.py", line 277, in _Popen
+    return Popen(process_obj)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/popen_fork.py", line 26, in __init__
+    self._launch(process_obj)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/popen_fork.py", line 73, in _launch
+    self.pid = os.fork()
+OSError: [Errno 22] Invalid argument
+Process Process-3:
+Traceback (most recent call last):
+  File "/mnt/c/Users/Administrator/Documents/G/poincare-embeddings/train.py", line 31, in train_mp
+    train(model, data, optimizer, opt, log, rank, queue, w_head, w_neg)
+  File "/mnt/c/Users/Administrator/Documents/G/poincare-embeddings/train.py", line 89, in train
+    for inputs, targets in _loader:
+  File "/home/chen/anaconda3/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 451, in __iter__
+    return _DataLoaderIter(self)
+  File "/home/chen/anaconda3/lib/python3.6/site-packages/torch/utils/data/dataloader.py", line 239, in __init__
+    w.start()
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/process.py", line 105, in start
+    self._popen = self._Popen(self)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/context.py", line 223, in _Popen
+    return _default_context.get_context().Process._Popen(process_obj)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/context.py", line 277, in _Popen
+    return Popen(process_obj)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/popen_fork.py", line 26, in __init__
+    self._launch(process_obj)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/popen_fork.py", line 73, in _launch
+    self.pid = os.fork()
+OSError: [Errno 22] Invalid argument
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/managers.py", line 749, in _callmethod
+    conn = self._tls.connection
+AttributeError: 'ForkAwareLocal' object has no attribute 'connection'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/process.py", line 258, in _bootstrap
+    self.run()
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/process.py", line 93, in run
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/c/Users/Administrator/Documents/G/poincare-embeddings/train.py", line 34, in train_mp
+    queue.put(None)
+  File "<string>", line 2, in put
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/managers.py", line 753, in _callmethod
+    self._connect()
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/managers.py", line 740, in _connect
+    conn = self._Client(self._token.address, authkey=self._authkey)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/connection.py", line 487, in Client
+    c = SocketClient(address)
+  File "/home/chen/anaconda3/lib/python3.6/multiprocessing/connection.py", line 614, in SocketClient
+    s.connect(address)
+FileNotFoundError: [Errno 2] No such file or directory

@@ -189,6 +189,8 @@ def set_up_output_file_name(opt):
         opt.fout += '_w2vsim'
     if opt.symmetrize:
         opt.fout += '_sym'
+    if opt.mapping_func == 'cos':
+        opt.fout += '_cos'
     opt.fout = f'{opt.fout}.lr={opt.lr}.dim={opt.dim}.negs={opt.negs}.burnin={opt.burnin}.batch={opt.batchsize}'
     if os.path.exists(opt.fout):
         if opt.override:
@@ -249,6 +251,7 @@ def parse_opt(debug=False):
     parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     parser.add_argument('-cold', help='Cold start learning embedding', action='store_true', default=False)
+    parser.add_argument('-mapping_func', help='Used in sim', type=str, default='reciprocal')
     if debug:
         return parser.parse_args([])
     return parser.parse_args()

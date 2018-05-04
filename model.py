@@ -10,7 +10,6 @@ import numpy as np
 from numpy.random import choice, randint
 import torch as th
 from torch import nn
-from numpy.linalg import norm
 from word_vec_loader import WordVectorLoader
 from torch.autograd import Function, Variable
 from torch.utils.data import Dataset
@@ -117,20 +116,43 @@ class Embedding(nn.Module):
     def embed(self, inputs):
         return self.lt(inputs)
 
-    def calc_pair_sim(self, inputs):
-        def _dist(v1, v2):
+    @staticmethod
+    def __rec_sim(v1, v2):
+        def _dist():
             return PoincareDistance()(v1, v2)
 
         def _dist2sim(d):
             return 2 / (1 + d) - 1
 
+        return _dist2sim(_dist()).squeeze()
+
+    @staticmethod
+    def __cos_sim(v1, v2):
+        def norm(v):
+            return th.sqrt(th.sum(v**2))
+
+        return th.sum(v1 * v2) / (norm(v1) * norm(v2))
+
+    def calc_pair_sim(self, inputs, mapping_func=''):
+        """
+
+        :param inputs:
+        :param mapping_func: {'reciprocal', 'cos'}
+        :return:
+        """
         pairs = self.embed(inputs)
         try:
             assert len(pairs.size()) == 3 and pairs.size(1) == 2
         except AssertionError as e:
             print(inputs)
             raise e
-        return _dist2sim(_dist(pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1))).squeeze()
+
+        v1, v2 = pairs.narrow(1, 0, 1), pairs.narrow(1, 1, 1)
+        if mapping_func == 'reciprocal':
+            return self.__rec_sim(v1, v2)
+        elif mapping_func == 'cos':
+            return self.__cos_sim(v1, v2)
+        raise NotImplemented()
 
     def update_kb(self, lr):
         lr = 0.01 * lr
