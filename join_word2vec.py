@@ -193,7 +193,9 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
         elif epoch == opt.burnin:
-            loss_balance = 1.0
+            loss_balance = 10.0
+        elif epoch == opt.burnin * 2:
+            loss_balance = 20.0
 
         node_iter = iter(loader)
         word_iter = iter(words_loader)
@@ -222,7 +224,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 model.zero_grad_kb()
                 optimizer.zero_grad()
                 dists = model.calc_pair_sim(inputs, opt.mapping_func)
-                loss = nn.MSELoss()(dists, targets) * loss_balance * 40
+                loss = nn.MSELoss()(dists, targets) * loss_balance
                 loss.backward()
                 optimizer.step(lr=lr)
                 model.update_kb(lr=lr)
