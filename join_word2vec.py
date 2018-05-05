@@ -171,7 +171,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
     words_loader = DataLoader(
         words_data,
-        batch_size=100,
+        batch_size=1,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=data.collate
@@ -222,7 +222,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 model.zero_grad_kb()
                 optimizer.zero_grad()
                 dists = model.calc_pair_sim(inputs, opt.mapping_func)
-                loss = nn.MSELoss()(dists, targets) * loss_balance
+                loss = nn.MSELoss()(dists, targets) * loss_balance * 20
                 loss.backward()
                 optimizer.step(lr=lr)
                 model.update_kb(lr=lr)

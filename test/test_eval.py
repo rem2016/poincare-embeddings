@@ -8,6 +8,15 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import evaluation
 
 
+def test_evaluate():
+    path = '../model/noun_unknown/nouns.pth'
+    ev = evaluation.Evaluator.initialize_by_file(path)
+    print('exp', ev.evaluate(method='exp'))
+    print('reci', ev.evaluate(method='reciprocal'))
+    print('tanh', ev.evaluate(method='tanh'))
+    print('neg', ev.evaluate(method='neg'))
+
+
 def test_all():
     models = re_eval.load_all_important_models('../model/data/', threshold=20, is_module_dir=False)
     print(len(models))
@@ -44,13 +53,4 @@ def test_all():
         print('=======================================================')
         print()
         print()
-
-
-def test_evaluate():
-    path = './model/noun_unknown/nouns.pth'
-    ev = evaluation.Evaluator.initialize_by_file(path)
-    print('exp', ev.evaluate(method='exp'))
-    print('reci', ev.evaluate(method='reciprocal'))
-    print('tanh', ev.evaluate(method='tanh'))
-    print('neg', ev.evaluate(method='neg'))
 
