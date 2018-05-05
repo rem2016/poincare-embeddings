@@ -222,7 +222,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 model.zero_grad_kb()
                 optimizer.zero_grad()
                 dists = model.calc_pair_sim(inputs, opt.mapping_func)
-                loss = nn.MSELoss()(dists, targets) * loss_balance * 200
+                loss = nn.MSELoss()(dists, targets) * loss_balance * 40
                 loss.backward()
                 optimizer.step(lr=lr)
                 model.update_kb(lr=lr)
