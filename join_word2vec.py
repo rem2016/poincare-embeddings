@@ -171,7 +171,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
     words_loader = DataLoader(
         words_data,
-        batch_size=1,
+        batch_size=10,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=data.collate
