@@ -222,7 +222,7 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
                 inputs, targets = v
                 optimizer.zero_grad()
                 preds = model(inputs.to(device))
-                loss = model.loss(preds, targets, size_average=True)
+                loss = model.loss(preds, targets.to(device), size_average=True)
                 loss.backward()
                 optimizer.step(lr=lr)
                 epoch_loss.append(loss.data.item())
