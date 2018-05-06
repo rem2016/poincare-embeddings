@@ -1,4 +1,6 @@
 import data_loader
+import numpy as np
+import spacy
 from time import time
 import data
 from word_vec_loader import WordVectorLoader
@@ -12,11 +14,14 @@ def clear():
     WordVectorLoader.sense_num = None
 
 
+nlp = spacy.load('en_core_web_lg')
+
+
 def test_load_debug():
     clear()
     data_path = '../wordnet/debug.tsv'
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
-    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs))
+    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs), WordVectorLoader.word_sim_adj)
     loader = DataLoader(
         _data,
         batch_size=2,
@@ -25,6 +30,12 @@ def test_load_debug():
         collate_fn=data_loader.SNGraphDataset.collate,
         timeout=200
     )
+
+    for i, (word, index) in enumerate(dwords.items()):
+        a = np.array(nlp(word).vector)
+        b = WordVectorLoader.word_vec[index - len(objs)]
+        assert np.all(a == b), str(index - len(objs))
+
     for a, b in loader:
         print(a)
         print(b)
@@ -37,7 +48,7 @@ def test_load_mammals():
     data_path = './wordnet/mammal_closure.tsv'
     start = time()
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
-    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs))
+    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs), WordVectorLoader.word_sim_adj)
     used = time() - start
     print("Loading used time", used)
     loader = DataLoader(
@@ -48,6 +59,12 @@ def test_load_mammals():
         collate_fn=data_loader.SNGraphDataset.collate,
         timeout=20
     )
+
+    for i, (word, index) in enumerate(dwords.items()):
+        a = np.array(nlp(word).vector)
+        b = WordVectorLoader.word_vec[index - len(objs)]
+        assert np.all(a == b), str(index - len(objs)) + " " + word
+
     print("Average nn", _data.calc_word_average_adj())
     start = time()
     for a, b in loader:
