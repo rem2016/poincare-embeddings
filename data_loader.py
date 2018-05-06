@@ -129,7 +129,10 @@ def is_perfect_sim(sim):
 
 
 class WordsDataset(Dataset):
-    def __init__(self, word_vec: np.array, sense_num, pair_per_word: int=100, threshold=0.6, max_tries=10, max_pairs=200):
+    # pay attention to sense num
+    # except from output, all index is based on word vec !!
+    def __init__(self, word_vec: np.array, sense_num: int, sim_adj: dict,
+                 pair_per_word: int=100, threshold=0.6, max_tries=10, max_pairs=200):
         self.npair = pair_per_word
         self.word_vec = np.array(word_vec)
         self.sense_num = sense_num
@@ -139,8 +142,8 @@ class WordsDataset(Dataset):
         self.word_num = len(word_vec)
         self.valid_index = []
         self.max_pairs = max_pairs
-        self.adj = [{} for _ in range(len(self.word_vec))]
-        self.init_adj()
+        self.adj = [{} for _ in range(len(word_vec))]
+        self.init_adj(sim_adj)
 
     def __calc_dist(self, a, b):
         sim = np.sum(a * b, axis=-1) / (norm(a, axis=-1) * norm(b, axis=-1))
@@ -167,15 +170,20 @@ class WordsDataset(Dataset):
             else:
                 b_indexes.extend(self.adj[index].keys())
                 sim.extend(self.adj[index].values())
-        return th.LongTensor([[index, b_index] for b_index in b_indexes]), \
+        return th.LongTensor([[index + self.sense_num, b_index + self.sense_num] for b_index in b_indexes]), \
                th.Tensor(sim)
 
-    def init_adj(self):
+    def init_adj(self, sim_adj):
         for i in range(len(self.word_vec)):
             v = self.word_vec[i]
             if norm(v).item() < 1e-7:
                 continue
             self.valid_index.append(i)
+
+        for a, items in sim_adj.items():
+            for b, sim in items.items():
+                self.adj[a - self.sense_num][b - self.sense_num] = sim
+
 
     def calc_word_average_adj(self):
         num = 0

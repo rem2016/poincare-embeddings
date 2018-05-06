@@ -1,9 +1,7 @@
 conda install -y pytorch-cpu torchvision-cpu -c pytorch
-git submodule init
-git submodule update
 pip install spacy
 pip install sparqlwrapper
 pip install rdflib
-pip install gensim
+sudo /home/ubuntu/anaconda3/bin/python -m spacy download en_core_web_lg
 python bash/env/download_wordnet.py
 

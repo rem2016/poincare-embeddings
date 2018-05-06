@@ -82,9 +82,9 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def eval_human(_model, objs, index2word=None, use_word=False, method='cos'):
+def eval_human(_model, objs, index2word=None, use_word=False):
     ev = Evaluator(_model.embedding(), objs, index2word=index2word)
-    return ev.evaluate(try_use_word=use_word, method=method)
+    return ev.evaluate(try_use_word=use_word)
 
 
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
@@ -103,8 +103,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
             log.info(f'Saving model f{_fout}')
-            # FIXME:
-            # log.info('Synset: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=False)))
+            log.info('Synset: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=False)))
             if w2v_nn or w2v_sim:
                 log.info('Word: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=True)))
             th.save({
@@ -117,34 +116,33 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
 
             # TODO if any error occurs here, refactor
             # compute embedding quality
-            # FIXME:
-            # log.info('Computing ranking')
-            # _start_time = time.time()
-            # train_mrank, train_mAP = ranking(train_adj, model, distfn, len(data.objects))
-            # mrank, mAP = train_mrank, train_mAP
-            # test_info = ''
-            # if test_adj is not None:
-            #     test_mrank, test_mAP = ranking(test_adj, model, distfn, len(data.objects))
-            #     mrank, mAP = test_mrank, test_mAP
-            #     test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
-            # # log.info(f'Computing finished. Used time: {time.time() - _start_time}')
-            #
-            # if mrank < min_rank[0]:
-            #     min_rank = (mrank, epoch)
-            # if mAP > max_map[0]:
-            # #     max_map = (mAP, epoch)
-            #
-            # log.info(
-            #     ('eval: {'
-            #      '"epoch": %d, '
-            #      '"elapsed": %.2f, '
-            #      '"loss": %.3f, '
-            #      '"train_mean_rank": %.2f, '
-            #      '"train_mAP": %.4f, '
-            #      '"best_rank": %.2f, '
-            #      '"best_mAP": %.4f%s}') % (
-            #         epoch, elapsed, loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
-            # )
+            log.info('Computing ranking')
+            _start_time = time.time()
+            train_mrank, train_mAP = ranking(train_adj, model, distfn, len(data.objects))
+            mrank, mAP = train_mrank, train_mAP
+            test_info = ''
+            if test_adj is not None:
+                test_mrank, test_mAP = ranking(test_adj, model, distfn, len(data.objects))
+                mrank, mAP = test_mrank, test_mAP
+                test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
+            log.info(f'Computing finished. Used time: {time.time() - _start_time}')
+
+            if mrank < min_rank[0]:
+                min_rank = (mrank, epoch)
+            if mAP > max_map[0]:
+                max_map = (mAP, epoch)
+
+            log.info(
+                ('eval: {'
+                 '"epoch": %d, '
+                 '"elapsed": %.2f, '
+                 '"loss": %.3f, '
+                 '"train_mean_rank": %.2f, '
+                 '"train_mAP": %.4f, '
+                 '"best_rank": %.2f, '
+                 '"best_mAP": %.4f%s}') % (
+                    epoch, elapsed, loss, train_mrank, train_mAP, min_rank[0], max_map[0], test_info)
+            )
         else:
             log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, '
                      f'"words_sim_loss": {word_sim_loss}, "elapsed": {elapsed}}}')
@@ -331,9 +329,7 @@ def start_predicting(opt, log, debug=False):
         if opt.w2v_sim:
             train.single_thread_train(_model, data, optimizer, opt, log,
                                       handler,
-                                      words_data=WordsDataset(WordVectorLoader.word_vec,
-                                                              WordVectorLoader.sense_num,
-                                                              WordVectorLoader.word_sim_adj),
+                                      words_data=WordsDataset(WordVectorLoader.word_vec, WordVectorLoader.sense_num),
                                       w_head_data=word_as_head_data,
                                       w_neg_data=word_as_neg_data)
         else:
@@ -352,9 +348,7 @@ def start_predicting(opt, log, debug=False):
         for rank in range(opt.nproc):
             if opt.w2v_sim:
                 print('sim')
-                word_data = WordsDataset(WordVectorLoader.word_vec,
-                                         sense_num=len(objects),
-                                         sim_adj=WordVectorLoader.word_sim_adj)
+                word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects))
                 p = concurrent_method(
                     target=join_word2vec.combine_w2v_sim_train,
                     args=(_model, data, word_data, optimizer, opt, log, rank + 1, queue)

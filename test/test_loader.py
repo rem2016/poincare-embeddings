@@ -65,25 +65,32 @@ def test_slurp_nouns():
 
 def test_load_nouns():
     clear()
-    data_path = '../wordnet/noun_closure.tsv'
+    data_path = './wordnet/noun_closure.tsv'
     print(data_path)
+    start = time()
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
-    print("loaded all words")
-    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs))
+    print("loaded all words", time() - start)
+    start = time()
+    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs), WordVectorLoader.word_sim_adj)
     print("init _data")
+    print("loaded all adj", time() - start)
     loader = DataLoader(
         _data,
-        batch_size=200,
+        batch_size=100,
         shuffle=True,
         num_workers=0,
         collate_fn=data_loader.SNGraphDataset.collate
     )
     print("start looping...")
     start = time()
-    last = time()
+    lasts = []
+    last_start = start
+    print(_data.calc_word_average_adj())
     for a, b in loader:
-        print(time() - last)
-        last = time()
+        last = time() - last_start
+        last_start = time()
+        lasts.append(last)
     used = time() - start
     print(_data.calc_word_average_adj())
-    print(used)
+    print("one epoch time", used)
+    print("batch time", sum(lasts) / len(lasts))

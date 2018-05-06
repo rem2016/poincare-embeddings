@@ -2,7 +2,7 @@
 
 # Get number of threads from environment or set to default
 if [ -z "$NTHREADS" ]; then
-   NTHREADS=2
+   NTHREADS=5
 fi
 
 echo "Using $NTHREADS threads"
@@ -24,9 +24,9 @@ python3 embed.py \
        -distfn poincare \
        -dset wordnet/noun_closure.train.tsv \
        -dset_test wordnet/noun_closure.test.tsv \
-       -fout model/KINGnouns.50d.cos.train \
+       -fout model/nouns.50d.cos.train \
        -batchsize 50 \
-       -eval_each 10 \
+       -eval_each 5 \
        -w2v_sim \
        -mapping_func cos \
        -nobalance \
