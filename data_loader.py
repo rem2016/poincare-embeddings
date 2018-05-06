@@ -132,12 +132,10 @@ class WordsDataset(Dataset):
     # pay attention to sense num
     # except from output, all index is based on word vec !!
     def __init__(self, word_vec: np.array, sense_num: int, sim_adj: dict,
-                 pair_per_word: int=100, threshold=0.6, max_tries=10, max_pairs=200):
-        self.npair = pair_per_word
+                 pair_per_word: int=100, max_pairs=200):
+        self.npair = max(pair_per_word, max_pairs)
         self.word_vec = np.array(word_vec)
         self.sense_num = sense_num
-        self.threshold = threshold
-        self.max_tries = max_tries
         self.least_pos = max(self.npair // 5, 1)
         self.word_num = len(word_vec)
         self.valid_index = []
@@ -161,7 +159,7 @@ class WordsDataset(Dataset):
 
         if len(self.adj[index]):
             adj_num = self.max_pairs - self.npair
-            if len(self.adj[index]) > adj_num:
+            if len(self.adj[index]) > adj_num > 0:
                 used = set(np.random.choice(len(self.adj[index]), adj_num))
                 for i, (b_index, _sim) in enumerate(self.adj[index].items()):
                     if i in used and b_index not in b_indexes:
@@ -183,7 +181,6 @@ class WordsDataset(Dataset):
         for a, items in sim_adj.items():
             for b, sim in items.items():
                 self.adj[a - self.sense_num][b - self.sense_num] = sim
-
 
     def calc_word_average_adj(self):
         num = 0
