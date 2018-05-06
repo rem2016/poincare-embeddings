@@ -161,9 +161,10 @@ def calc_pair_sim(pairs, ll):
 
 def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
     # setup parallel data loader
+    model = model.to(device)
     loader = DataLoader(
         data,
-        batch_size=opt.batchsize,
+        batch_size=opt.batchsize * 10,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=data.collate
@@ -171,7 +172,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
     words_loader = DataLoader(
         words_data,
-        batch_size=100,
+        batch_size=1000,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=data.collate
@@ -208,7 +209,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     continue
                 inputs, targets = v
                 optimizer.zero_grad()
-                preds = model(inputs)
+                preds = model(inputs.to(device))
                 loss = model.loss(preds, targets, size_average=True)
                 loss.backward()
                 optimizer.step(lr=lr)
@@ -221,11 +222,10 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 inputs, targets = v
                 model.zero_grad_kb()
                 optimizer.zero_grad()
-                dists = model.calc_pair_sim(inputs, opt.mapping_func)
-                loss = nn.MSELoss()(dists, targets) * loss_balance
+                dists = model.calc_pair_sim(inputs.to(device), opt.mapping_func)
+                loss = nn.MSELoss()(dists, targets.to(device))
                 loss.backward()
                 optimizer.step(lr=lr)
-                model.update_kb(lr=lr)
                 epoch_words_loss.append(loss.data.item())
 
         elapsed = timeit.default_timer() - t_start

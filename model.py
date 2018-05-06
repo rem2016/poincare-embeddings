@@ -16,6 +16,10 @@ from torch.utils.data import Dataset
 from collections import defaultdict as ddict
 
 eps = 1e-5
+if th.cuda.is_available():
+    device = th.device('cuda')
+else:
+    device = th.device('cpu')
 
 
 class Arcosh(Function):
@@ -96,9 +100,7 @@ class Embedding(nn.Module):
             max_norm=max_norm,
             sparse=True,
             scale_grad_by_freq=False
-        )
-        self.k = th.nn.Parameter(th.ones(1))
-        self.b = th.nn.Parameter(th.ones(1) * -3)
+        ).to(device)
         self.dist = dist
         self.init_weights()
 
@@ -154,13 +156,6 @@ class Embedding(nn.Module):
         elif mapping_func == 'cos':
             return self.__cos_sim(v1, v2)
         raise NotImplemented()
-
-    def update_kb(self, lr):
-        lr = 0.01 * lr
-        if self.k.grad is not None and not th.isnan(self.k.grad):
-            self.k.data = self.k - lr * self.k.grad
-        if self.b.grad is not None and not th.isnan(self.b.grad):
-            self.b.data = self.b - lr * self.b.grad
 
     def zero_grad_kb(self):
         self.k.grad = None

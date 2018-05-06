@@ -364,7 +364,8 @@ def start_predicting(opt, log, debug=False):
         queue = mp.Manager().Queue()
         _model.share_memory()
         processes = []
-        for rank in range(opt.nproc):
+        # NTHREADS=1 For gpu
+        for rank in range(1):
             if opt.w2v_sim:
                 print('sim')
                 word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects),
@@ -385,12 +386,7 @@ def start_predicting(opt, log, debug=False):
         control_params = (queue, log, train_adjacency, test_adjacency, data,
                           opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
         if not debug:
-            ctrl = mp.Process(
-                target=control,
-                args=control_params
-            )
-            ctrl.start()
-            ctrl.join()
+            control(*control_params)
         return control_params
 
 
