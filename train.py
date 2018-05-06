@@ -189,18 +189,18 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
     rank = 1
     loader = DataLoader(
         data,
-        batch_size=opt.batchsize * 100,
+        batch_size=opt.batchsize,
         shuffle=True,
-        num_workers=opt.ndproc,
+        num_workers=4,
         collate_fn=data.collate
     )
 
     if words_data is not None:
         words_loader = DataLoader(
             words_data,
-            batch_size=10000,
+            batch_size=100,
             shuffle=True,
-            num_workers=opt.ndproc,
+            num_workers=4,
             collate_fn=data.collate
         )
     else:
