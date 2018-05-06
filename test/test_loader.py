@@ -1,6 +1,7 @@
 import data_loader
 import numpy as np
 import spacy
+from nltk.corpus import wordnet as wn
 from time import time
 import data
 from word_vec_loader import WordVectorLoader
@@ -69,11 +70,22 @@ def test_load_mammals():
         timeout=20
     )
 
+    # vector loading correct
     for i, (word, index) in enumerate(dwords.items()):
         a = np.array(nlp(word).vector)
         b = WordVectorLoader.word_vec[index - len(objs)]
         assert np.all(a == b), str(index - len(objs)) + " " + word
 
+    # link correct
+    for h, t, _ in idx:
+        if h >= len(objs):
+            sset = wn.synset(objs[t])
+            name = WordVectorLoader.index2word[h]
+            for lemma in sset.lemmas():
+                if lemma.name() == name:
+                    break
+            else:
+                raise AssertionError(f'{name} not in {objs[t]} {{{list(sset.lemmas())}}}')
     print("Average nn", _data.calc_word_average_adj())
     start = time()
     for a, b in loader:
