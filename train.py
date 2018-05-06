@@ -171,7 +171,6 @@ class SingleThreadHandler:
 def single_thread_train(model, data, optimizer, opt, log, handler, words_data=None,
                         w_head_data=None, w_neg_data=None):
     rank = 1
-    model = model.to(device)
     loader = DataLoader(
         data,
         batch_size=opt.batchsize * 10,

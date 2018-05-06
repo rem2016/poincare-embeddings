@@ -12,6 +12,10 @@ from torch.utils.data import Dataset
 from collections import defaultdict as ddict
 
 eps = 1e-5
+if th.cuda.is_available():
+    device = th.device('cuda')
+else:
+    device = th.device('cpu')
 
 
 class GraphDataset(Dataset):
@@ -98,7 +102,7 @@ class SNGraphDataset(GraphDataset):
             opt.dim,
             dist=distfn,
             max_norm=max_norm
-        )
+        ).to(device)
         data.objects = objects
         return model, data, model_name, conf
 
