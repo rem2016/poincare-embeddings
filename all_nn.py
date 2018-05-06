@@ -50,6 +50,7 @@ def calc(queue, start, end, _data, save_step, rank):
         if i % save_step == save_step - 1:
             queue.put(dict(save_dict))
             save_dict.clear()
+    queue.put(dict(save_dict))
 
 
 def is_good_sim(sim):
