@@ -17,6 +17,7 @@ mapping_methods = {
     'neg': lambda x: (33 - x) / 33,
     'exp': lambda x: np.exp(-x),
     'tanh': lambda x: 2 - 2 / (1 + np.exp(-x)),
+    'cos': lambda x, y: np.sum(x*y, axis=-1) / (norm(x) * norm(y))
 }
 
 
@@ -108,9 +109,11 @@ class Evaluator:
             s2 = self.word2synset(w2)
             return self.max_synset_similarity(s1, s2, self.syn_similarity_gen(method))
         try:
+            if method == 'cos':
+                return mapping_methods['cos'](self.word2vec[w1], self.word2vec[w2])
             dist = self.word_dist(w1, w2) * self.k
             return mapping_methods[method](dist)
-        except NoExistError:
+        except (NoExistError, KeyError):
             self.failed_times += 1
             return 0
             s1 = self.word2synset(w1)
