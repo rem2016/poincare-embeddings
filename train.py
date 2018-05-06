@@ -114,13 +114,13 @@ def train(model, data, optimizer, opt, log, rank=1, queue=None, w_head_data=None
 
 class SingleThreadHandler:
 
-    def __init__(self, log, train_types, test_types, data, fout, distfn, ranking):
+    def __init__(self, log, train_types, test_types, data, fout, distfn, index2word):
         self.log = log
         self.types = train_types
+        self.index2word = index2word
         self.data = data
         self.fout = fout
         self.distfn = distfn
-        self.ranking = ranking
         self.min_rank = (np.Inf, -1)
         self.max_map = (0, -1)
 
@@ -130,7 +130,7 @@ class SingleThreadHandler:
         data = self.data
         fout = self.fout
         distfn = self.distfn
-        ranking = self.ranking
+        from embed import ranking, eval_human
 
         epoch, elapsed, loss, model, word_sim_loss = msg
         if model is not None:
@@ -142,11 +142,26 @@ class SingleThreadHandler:
                 'epoch': epoch,
                 'objects': data.objects,
             }, _fout)
+            log.info('Synset: ' + str(eval_human(model,
+                                                 data.objects,
+                                                 self.index2word,
+                                                 method='reciprocal',
+                                                 use_word=False)))
+            log.info('Word Cos: ' + str(eval_human(model,
+                                                   data.objects,
+                                                   self.index2word,
+                                                   use_word=True,
+                                                   method='cos')))
+            log.info('Word Rec: ' + str(eval_human(model,
+                                                   data.objects,
+                                                   self.index2word,
+                                                   use_word=True,
+                                                   method='reciprocal')))
 
             # compute embedding quality
             log.info('Computing ranking')
             _start_time = time.time()
-            mrank, mAP = ranking(types, model, distfn)
+            mrank, mAP = ranking(types, model, distfn, sense_num=len(data.objects))
             log.info(f'Computing finished. Used time: {time.time() - _start_time}')
             if mrank < self.min_rank[0]:
                 self.min_rank = (mrank, epoch)
@@ -165,7 +180,8 @@ class SingleThreadHandler:
                     epoch, elapsed, loss, mrank, mAP, self.min_rank[0], self.max_map[0])
             )
         else:
-            log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}}}')
+            log.info(f'json_log: {{"epoch": {epoch}, "loss": {loss}, "elapsed": {elapsed}, '
+                     f'"words_loss": {word_sim_loss}}}')
 
 
 def single_thread_train(model, data, optimizer, opt, log, handler, words_data=None,

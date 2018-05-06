@@ -342,7 +342,8 @@ def start_predicting(opt, log, debug=False):
     )
 
     if opt.nproc == 0:
-        handler = train.SingleThreadHandler(log, train_adjacency, test_adjacency, data, opt.fout, distfn, ranking)
+        handler = train.SingleThreadHandler(log, train_adjacency, test_adjacency, data, opt.fout,
+                                            distfn, WordVectorLoader.index2word)
         if opt.w2v_sim:
             train.single_thread_train(_model, data, optimizer, opt, log,
                                       handler,
