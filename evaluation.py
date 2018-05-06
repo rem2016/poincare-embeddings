@@ -71,6 +71,8 @@ class Evaluator:
 
     def evaluate(self, method='tanh', is_word_level=False, try_use_word=False):
         self.failed_times = 0
+        assert method in mapping_methods
+        print(method)
         if try_use_word:
             if self.index2word is not None:
                 is_word_level = True
@@ -93,7 +95,7 @@ class Evaluator:
                 return v
         else:
             def sim(x, y):
-                v = self.word_similarity(x, y, method)
+                v = self.word_similarity(x, y, method, False)
                 if isinstance(v, th.Tensor):
                     v = float(v.item())
                 return v

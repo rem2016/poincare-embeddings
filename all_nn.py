@@ -1,20 +1,26 @@
 import torch.multiprocessing as mp
 import numpy as np
+from collections import defaultdict
+import os
+import sys
+import sematch.evaluation as ev
+import numpy as np
 from time import time
 import data
 from numpy.linalg import norm
+import logging
 from word_vec_loader import WordVectorLoader
 from collections import defaultdict
 
 
-def save(path, ans, objs):
+def save(path, ans, index2word):
     with open(path, 'w') as f:
         for a, items in ans.items():
             for b, sim in items.items():
-                f.write(f'{objs[a]}\t{objs[b]}\t{sim}\n')
+                f.write(f'{index2word[a]}\t{index2word[b]}\t{sim}\n')
 
 
-def control(queue, path, objs):
+def control(queue, path, index2word, log):
     ans = {}
     target = 100
     step = 100
@@ -30,14 +36,15 @@ def control(queue, path, objs):
             ans[key] = msg[key]
         used = time() - start
         if len(ans) >= target:
-            save(path, ans, objs)
+            save(path, ans, index2word)
             target += step
-        if len(ans) >= len(objs):
+        if len(ans) >= len(index2word):
             print("=================================")
             print("Finished!")
             print("=================================")
             break
-        print("Left time", used / max(1, (len(ans))) * len(objs) - used)
+        left_time = used / max(1, (len(ans))) * len(index2word) - used
+        log.info(f"Left time {left_time}")
 
 
 def calc(queue, start, end, _data, save_step, rank):
@@ -47,10 +54,34 @@ def calc(queue, start, end, _data, save_step, rank):
             sim = calc_dist(_data[i], _data[j])
             if is_perfect_sim(sim):
                 save_dict[i][j] = float(sim)
-        if i % save_step == save_step - 1:
+        if len(save_dict) % save_step == save_step - 1:
             queue.put(dict(save_dict))
             save_dict.clear()
     queue.put(dict(save_dict))
+
+
+def calc_all(queue, start, end, _data, save_step, all_index):
+    save_dict = defaultdict(lambda: {})
+    for i in all_index[start: end]:
+        for j in all_index:
+            sim = calc_dist(_data[i], _data[j])
+            save_dict[i][j] = float(sim)
+        if len(save_dict) % save_step == save_step - 1:
+            queue.put(dict(save_dict))
+            save_dict.clear()
+    queue.put(dict(save_dict))
+
+
+def get_all_eval_words():
+    dat = ev.WordSimDataset()
+    data_word_noun = ['noun_rg', 'noun_mc', 'noun_ws353', 'noun_ws353-sim', 'noun_simlex']
+    all_words = set()
+    for dat_name in data_word_noun:
+        words, sim = dat.load_dataset(dat_name)
+        for a, b in words:
+            all_words.add(a)
+            all_words.add(b)
+    return all_words
 
 
 def is_good_sim(sim):
@@ -59,7 +90,7 @@ def is_good_sim(sim):
 
 
 def is_perfect_sim(sim):
-    return sim > 0.4  # total 0.5%
+    return sim > 0.5  # total 0.5%
 
 
 def calc_dist(a, b):
@@ -67,8 +98,9 @@ def calc_dist(a, b):
     return sim
 
 
-def main(n_proc=3, save_path='all_nn.tsv', save_step=100):
+def main(n_proc=16, save_path='all_nn.tsv', save_step=100):
     data_path = './wordnet/noun_closure.tsv'
+    log = logging.getLogger('la')
     print(data_path)
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
     print("loaded all words")
@@ -81,8 +113,17 @@ def main(n_proc=3, save_path='all_nn.tsv', save_step=100):
         p = mp.Process(target=calc, args=(queue, step * i, step * (i + 1), vec, save_step, i + 1))
         p.start()
         processes.append(p)
-    queue.put({})
-    ctrl = mp.Process(target=control, args=(queue, save_path, objs))
+
+    all_words = get_all_eval_words()
+    all_index = [dwords[x] - len(objs) for x in all_words]
+    step = int(len(all_index) / n_proc + 0.999999999999999)
+    for i in range(n_proc):
+        p = mp.Process(target=calc_all, args=(queue, step * i, step * (i + 1), vec, save_step, all_index))
+        p.start()
+        processes.append(p)
+
+    index2word = WordVectorLoader.index2word[len(objs):]
+    ctrl = mp.Process(target=control, args=(queue, save_path, index2word, log))
     ctrl.start()
     ctrl.join()
 

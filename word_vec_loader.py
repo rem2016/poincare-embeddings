@@ -1,4 +1,5 @@
 import numpy as np
+from collections import defaultdict
 from torch.nn.modules import Embedding
 import torch as th
 from torch import nn
@@ -21,6 +22,7 @@ class WordVectorLoader:
     word_vec = None
     embeddings = None
     sense_num = None
+    word_sim_adj = None
 
     def __init__(self):
         raise NotImplemented("Static class")
@@ -38,6 +40,7 @@ class WordVectorLoader:
         cls.index2word = index2word
         cls.word2index = dwords
         cls.word_vec = np.array(word_vec)
+        cls.load_sim_adj()
         return cls.embeddings
 
     @classmethod
@@ -45,6 +48,20 @@ class WordVectorLoader:
         if cls.embeddings is None:
             raise ValueError()
         return cls.embeddings(inputs)
+
+    @classmethod
+    def load_sim_adj(cls):
+        word_sim_adj = defaultdict(lambda: {})
+        with open('all_nn.tsv') as f:
+            for line in f:
+                w1, w2, sim = line[:-1].split('\t')
+                if w1 not in cls.word2index or w2 not in cls.word2index:
+                    continue
+                sim = float(sim)
+                i1, i2 = cls.word2index[w1], cls.word2index[w2]
+                word_sim_adj[i1][i2] = sim
+                word_sim_adj[i2][i1] = sim
+        cls.word_sim_adj = dict(word_sim_adj)
 
     @classmethod
     def get_vec_by_word(cls, w):
