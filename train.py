@@ -9,9 +9,7 @@
 import numpy as np
 import torch as th
 from torch import nn
-from join_word2vec import calc_pair_sim
 import time
-from word_vec_loader import WordVectorLoader
 import timeit
 from torch.utils.data import DataLoader
 import gc
@@ -134,7 +132,7 @@ class SingleThreadHandler:
         distfn = self.distfn
         ranking = self.ranking
 
-        epoch, elapsed, loss, model = msg
+        epoch, elapsed, loss, model, word_sim_loss = msg
         if model is not None:
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
@@ -159,6 +157,7 @@ class SingleThreadHandler:
                  '"epoch": %d, '
                  '"elapsed": %.2f, '
                  '"loss": %.3f, '
+                 f'"word_sim_loss": {word_sim_loss}, '
                  '"mean_rank": %.2f, '
                  '"mAP": %.4f, '
                  '"best_rank": %.2f, '
@@ -171,47 +170,30 @@ class SingleThreadHandler:
 
 def single_thread_train(model, data, optimizer, opt, log, handler, words_data=None,
                         w_head_data=None, w_neg_data=None):
-    # setup parallel data loader
+    rank = 1
+    model = model.to(device)
     loader = DataLoader(
         data,
-        batch_size=opt.batchsize,
+        batch_size=opt.batchsize * 10,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=data.collate
     )
 
-    words_loader = None
     if words_data is not None:
         words_loader = DataLoader(
             words_data,
-            batch_size=opt.batchsize,
+            batch_size=1000,
             shuffle=True,
             num_workers=opt.ndproc,
             collate_fn=data.collate
         )
+    else:
+        words_loader = []
 
-    head_loader = []
-    neg_loader = []
-    if w_head_data is not None:
-        head_loader = DataLoader(
-            w_head_data,
-            batch_size=opt.batchsize,
-            shuffle=True,
-            num_workers=opt.ndproc,
-            collate_fn=w_head_data.collate,
-            timeout=200
-        )
-
-    if w_neg_data is not None:
-        neg_loader = DataLoader(
-            w_neg_data,
-            batch_size=opt.batchsize,
-            shuffle=True,
-            num_workers=opt.ndproc,
-            collate_fn=w_head_data.collate,
-            timeout=200
-        )
-
+    loss_balance = 1.0
+    if opt.cold:
+        loss_balance *= 0.1
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
@@ -221,43 +203,62 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
         t_start = timeit.default_timer()
         if epoch < opt.burnin:
             data.burnin = True
-            lr = opt.lr * _lr_multiplier
-            log.info(f'Burnin: lr={lr}')
-        elapsed = 0
-        for _loader, params in ((loader, {}),
-                                (head_loader, dict(fix_nn=False, embed_index=(1, 0, 1))),
-                                (neg_loader, dict(fix_nn=False, embed_index=(1, 2, opt.negs)))):
-            for inputs, targets in _loader:
-                inputs = inputs.to(device, dtype=th.long)
-                targets = targets.to(device, dtype=th.long)
-                elapsed = timeit.default_timer() - t_start
+            lr = opt.lr * 0.01
+            if rank == 1:
+                log.info(f'Burnin: lr={lr}')
+        elif epoch == opt.burnin:
+            loss_balance = 1.0
+
+        node_iter = iter(loader)
+        word_iter = iter(words_loader)
+        i = 0
+        alive = 3
+        while alive:
+            i = 1 - i
+            if i == 0:
+                v = next(node_iter, None)
+                if v is None:
+                    alive &= 1
+                    continue
+                inputs, targets = v
                 optimizer.zero_grad()
-                preds = model(inputs, **params)
+                preds = model(inputs.to(device))
                 loss = model.loss(preds, targets, size_average=True)
                 loss.backward()
                 optimizer.step(lr=lr)
                 epoch_loss.append(loss.data.item())
-
-        if words_data is not None:
-            for inputs, targets in words_loader:
-                elapsed = timeit.default_timer() - t_start
+            else:
+                v = next(word_iter, None)
+                if v is None:
+                    alive &= 2
+                    continue
+                inputs, targets = v
+                model.zero_grad_kb()
                 optimizer.zero_grad()
-                dists = calc_pair_sim(model.embed(inputs))
-                loss = 20 * nn.MSELoss()(dists, targets)
+                dists = model.calc_pair_sim(inputs.to(device), opt.mapping_func)
+                loss = nn.MSELoss()(dists, targets.to(device))
                 loss.backward()
                 optimizer.step(lr=lr)
-                epoch_words_loss.append(loss.data[0])
+                epoch_words_loss.append(loss.data.item())
 
-        emb = None
-        if epoch == (opt.epochs - 1) or epoch % opt.eval_each == (opt.eval_each - 1):
-            emb = model
-        log.info(
-            'info: {'
-            f'"elapsed": {elapsed}, '
-            f'"loss": {np.mean(epoch_loss)}, '
-            f'"words_loss": {np.mean(epoch_words_loss) if len(epoch_words_loss) else None}'
-            '}'
-        )
-        handler.handle(msg=(epoch, elapsed, np.mean(epoch_loss), emb))
+        elapsed = timeit.default_timer() - t_start
+        if rank == 1:
+            word_sim_loss = np.mean(epoch_words_loss) if len(epoch_words_loss) else None
+            emb = None
+            if epoch == (opt.epochs - 1) or epoch % opt.eval_each == (opt.eval_each - 1):
+                emb = model
+            handler.handle(
+                (epoch, elapsed, np.mean(epoch_loss), emb, word_sim_loss)
+            )
+            log.info('info: {'
+                     f'"k": {model.k.item()}'
+                     '}')
+
+        if not opt.nobalance:
+            if epoch >= opt.burnin * opt.balance_stage:
+                loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
+                if rank == 1:
+                    log.info(f'Loss balance: {loss_balance}')
         gc.collect()
+
 

@@ -364,8 +364,7 @@ def start_predicting(opt, log, debug=False):
         queue = mp.Manager().Queue()
         _model.share_memory()
         processes = []
-        # NTHREADS=1 For gpu
-        for rank in range(1):
+        for rank in range(opt.nproc):
             if opt.w2v_sim:
                 print('sim')
                 word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects),
