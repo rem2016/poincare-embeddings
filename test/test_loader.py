@@ -5,6 +5,11 @@ from time import time
 import data
 from word_vec_loader import WordVectorLoader
 from torch.utils.data import Dataset, DataLoader
+from numpy.linalg import norm
+def calc_dist(a, b):
+    sim = np.sum(a * b) / (norm(a) * norm(b))
+    return sim
+
 
 
 def clear():
@@ -48,7 +53,11 @@ def test_load_mammals():
     data_path = './wordnet/mammal_closure.tsv'
     start = time()
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
-    _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs), WordVectorLoader.word_sim_adj)
+    _data = data_loader.WordsDataset(WordVectorLoader.word_vec,
+                                     len(objs),
+                                     WordVectorLoader.word_sim_adj,
+                                     pair_per_word=2,
+                                     max_pairs=2)
     used = time() - start
     print("Loading used time", used)
     loader = DataLoader(
@@ -68,7 +77,10 @@ def test_load_mammals():
     print("Average nn", _data.calc_word_average_adj())
     start = time()
     for a, b in loader:
-        pass
+        for (q, p), sim in zip(a, b):
+            word_q, word_p = WordVectorLoader.index2word[q], WordVectorLoader.index2word[p]
+            vq, vp = np.array(nlp(word_q).vector), np.array(nlp(word_p).vector)
+            assert abs(calc_dist(vq, vp) - sim) < 1e-6
     used = time() - start
     print(used)
 
