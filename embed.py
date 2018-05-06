@@ -348,7 +348,7 @@ def start_predicting(opt, log, debug=False):
         for rank in range(opt.nproc):
             if opt.w2v_sim:
                 print('sim')
-                word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects))
+                word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects), sim_adj=WordVectorLoader.word_sim_adj)
                 p = concurrent_method(
                     target=join_word2vec.combine_w2v_sim_train,
                     args=(_model, data, word_data, optimizer, opt, log, rank + 1, queue)
