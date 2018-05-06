@@ -272,7 +272,7 @@ def parse_opt(debug=False):
     parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     parser.add_argument('-cold', help='Cold start learning embedding', action='store_true', default=False)
-    parser.add_argument('-nobalance', help='do not use balance in sim', action='store_true', default=False)
+    parser.add_argument('-nobalance', help='do not use balance in sim', action='store_true', default=True)
     parser.add_argument('-mapping_func', help='Used in sim', type=str, default='reciprocal')
     if debug:
         return parser.parse_args([])
