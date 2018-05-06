@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from collections import defaultdict
 from torch.nn.modules import Embedding
 import torch as th
@@ -52,6 +53,10 @@ class WordVectorLoader:
     @classmethod
     def load_sim_adj(cls):
         word_sim_adj = defaultdict(lambda: {})
+        if not os.path.exists('all_nn.tsv'):
+            print('cannot find all_nn')
+            cls.word_sim_adj = word_sim_adj
+            return
         with open('all_nn.tsv') as f:
             for line in f:
                 w1, w2, sim = line[:-1].split('\t')
