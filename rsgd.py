@@ -9,7 +9,13 @@
 import torch as th
 from torch.optim.optimizer import Optimizer, required
 
-spten_t = th.sparse.FloatTensor
+
+if th.cuda.is_available():
+    device = th.device('cuda')
+    spten_t = th.cuda.sparse.FloatTensor
+else:
+    device = th.device('cpu')
+    spten_t = th.sparse.FloatTensor
 
 
 def poincare_grad(p, d_p):
