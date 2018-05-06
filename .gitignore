@@ -5,3 +5,4 @@ model/
 .vscode/
 experiment/
 .ipynb_checkpoints/
+nohup.*

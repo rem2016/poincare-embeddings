@@ -13,7 +13,7 @@ from sematch.utility import memoized
 
 
 mapping_methods = {
-    'reciprocal': lambda x: 1 / (1 + x),
+    'reciprocal': lambda x: (1 - x) / (1 + x),
     'neg': lambda x: (33 - x) / 33,
     'exp': lambda x: np.exp(-x),
     'tanh': lambda x: 2 - 2 / (1 + np.exp(-x)),
@@ -45,7 +45,7 @@ class Evaluator:
         """
         self.failed_times = 0
         if k is None:
-            k = 12
+            k = 1
         self.k = k
         self.synmap = None
         self.model = None
@@ -106,10 +106,15 @@ class Evaluator:
 
     @memoized
     def word_similarity(self, w1, w2, method='exp', is_word=False):
+        # synset
         if not is_word:
+            if method == 'cos':
+                print("Cannot use cos in not word evaluation. Changed to tanh automatically")
+                method = 'tanh'
             s1 = self.word2synset(w1)
             s2 = self.word2synset(w2)
             return self.max_synset_similarity(s1, s2, self.syn_similarity_gen(method))
+        # word
         try:
             if method == 'cos':
                 return mapping_methods['cos'](self.word2vec[w1], self.word2vec[w2])
