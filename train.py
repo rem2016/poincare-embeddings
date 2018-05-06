@@ -249,7 +249,7 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
                 (epoch, elapsed, np.mean(epoch_loss), emb, word_sim_loss)
             )
             log.info('info: {'
-                     f'"k": {model.k.item()}'
+                     f'"k": {loss_balance}'
                      '}')
 
         if not opt.nobalance:
