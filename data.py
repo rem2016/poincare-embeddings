@@ -74,7 +74,7 @@ def load_all_related_words(idx, objects, enames):
                 if '_' in name:
                     continue
                 _words.add(name)
-        return list(_words)
+        return _words
 
     def add_words_to_graph():
         for synset, index in enames.items():
@@ -89,11 +89,15 @@ def load_all_related_words(idx, objects, enames):
     nlp = spacy.load('en_core_web_lg')
     print('Loading wordnet words')
     all_words = get_all_related_words()
-    for word, token in zip(all_words, nlp(' '.join(all_words))):
+    for token in nlp(' '.join(all_words)):
+        if token.text not in all_words:
+            continue
+        if token.text in dwords:
+            continue
         vector = token.vector
         if np.sum(np.abs(vector)) < 1e-5:
             continue
-        dwords[word] = len(word_vec) + len(objects)
+        dwords[token.text] = len(word_vec) + len(objects)
         word_vec.append(vector)
 
     add_words_to_graph()

@@ -54,7 +54,7 @@ class WordVectorLoader:
     def load_sim_adj(cls):
         word_sim_adj = defaultdict(lambda: {})
         if not os.path.exists('all_nn.tsv'):
-            print('cannot find all_nn')
+            print("cannot find all_nn.tsv")
             cls.word_sim_adj = word_sim_adj
             return
         with open('all_nn.tsv') as f:
