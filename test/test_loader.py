@@ -34,9 +34,12 @@ def test_load_debug():
 
 def test_load_mammals():
     clear()
-    data_path = '../wordnet/mammal_closure.tsv'
+    data_path = './wordnet/mammal_closure.tsv'
+    start = time()
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
     _data = data_loader.WordsDataset(WordVectorLoader.word_vec, len(objs))
+    used = time() - start
+    print("Loading used time", used)
     loader = DataLoader(
         _data,
         batch_size=20,
@@ -45,6 +48,7 @@ def test_load_mammals():
         collate_fn=data_loader.SNGraphDataset.collate,
         timeout=20
     )
+    print("Average nn", _data.calc_word_average_adj())
     start = time()
     for a, b in loader:
         pass
