@@ -89,7 +89,7 @@ class Evaluator:
                     raise OutofdateVersionError()
 
             def sim(x, y):
-                v = self.word_similarity(x, y, method, is_word=True)
+                v = self.word_similarity(x, y, method, True)
                 if isinstance(v, th.Tensor):
                     v = float(v.item())
                 return v

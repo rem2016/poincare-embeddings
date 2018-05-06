@@ -181,6 +181,7 @@ class WordsDataset(Dataset):
         for a, items in sim_adj.items():
             for b, sim in items.items():
                 self.adj[a - self.sense_num][b - self.sense_num] = sim
+                self.adj[b - self.sense_num][a - self.sense_num] = sim
 
     def calc_word_average_adj(self):
         num = 0
