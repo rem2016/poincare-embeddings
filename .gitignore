@@ -5,4 +5,3 @@ model/
 .vscode/
 experiment/
 .ipynb_checkpoints/
-*.tsv

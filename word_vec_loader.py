@@ -57,6 +57,7 @@ class WordVectorLoader:
             print("cannot find all_nn.tsv")
             cls.word_sim_adj = word_sim_adj
             return
+        count = 0
         with open('all_nn.tsv') as f:
             for line in f:
                 w1, w2, sim = line[:-1].split('\t')
@@ -66,6 +67,8 @@ class WordVectorLoader:
                 i1, i2 = cls.word2index[w1], cls.word2index[w2]
                 word_sim_adj[i1][i2] = sim
                 word_sim_adj[i2][i1] = sim
+                count += 1
+        print(f"Loaded all_nn.tsv. Words:  {len(word_sim_adj)}, num: {count}, average: {count / len(word_sim_adj)}")
         cls.word_sim_adj = dict(word_sim_adj)
 
     @classmethod
