@@ -3,6 +3,7 @@ import numpy as np
 from time import time
 import data
 from numpy.linalg import norm
+import logging
 from word_vec_loader import WordVectorLoader
 from collections import defaultdict
 
@@ -14,7 +15,7 @@ def save(path, ans, objs):
                 f.write(f'{objs[a]}\t{objs[b]}\t{sim}\n')
 
 
-def control(queue, path, objs):
+def control(queue, path, index2word, log):
     ans = {}
     target = 100
     step = 100
@@ -30,14 +31,15 @@ def control(queue, path, objs):
             ans[key] = msg[key]
         used = time() - start
         if len(ans) >= target:
-            save(path, ans, objs)
+            save(path, ans, index2word)
             target += step
-        if len(ans) >= len(objs):
+        if len(ans) >= len(index2word):
             print("=================================")
             print("Finished!")
             print("=================================")
             break
-        print("Left time", used / max(1, (len(ans))) * len(objs) - used)
+        left_time = used / max(1, (len(ans))) * len(index2word) - used
+        log.info(f"Left time {left_time}")
 
 
 def calc(queue, start, end, _data, save_step, rank):
@@ -68,6 +70,7 @@ def calc_dist(a, b):
 
 def main(n_proc=3, save_path='all_nn.tsv', save_step=100):
     data_path = './wordnet/noun_closure.tsv'
+    log = logging.getLogger('la')
     print(data_path)
     idx, objs, dwords = data.slurp(data_path, load_word=True, build_word_vector=True)
     print("loaded all words")
@@ -81,7 +84,8 @@ def main(n_proc=3, save_path='all_nn.tsv', save_step=100):
         p.start()
         processes.append(p)
     queue.put({})
-    ctrl = mp.Process(target=control, args=(queue, save_path, objs))
+    index2word = WordVectorLoader.index2word[len(objs):]
+    ctrl = mp.Process(target=control, args=(queue, save_path, index2word, log))
     ctrl.start()
     ctrl.join()
 
