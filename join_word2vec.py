@@ -188,7 +188,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
         word_iter = iter(words_loader)
         i = 0
-        alive = 3
+        alive = 1
         while alive:
             i = 1 - i
             if i == 0:
