@@ -185,15 +185,15 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         epoch_words_loss = []
         loss = None
         data.burnin = False
-        lr = opt.lr
+        lr = 3.0
         t_start = timeit.default_timer()
-        if epoch < opt.burnin:
-            data.burnin = True
-            lr = opt.lr * 0.01
-            if rank == 1:
-                log.info(f'Burnin: lr={lr}')
-        elif epoch == opt.burnin:
-            loss_balance = 1.0
+        # if epoch < opt.burnin:
+        #     data.burnin = True
+        #     lr = opt.lr * 0.01
+        #     if rank == 1:
+        #         log.info(f'Burnin: lr={lr}')
+        # elif epoch == opt.burnin:
+        #     loss_balance = 1.0
 
         node_iter = iter(loader)
         word_iter = iter(words_loader)
