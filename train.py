@@ -233,7 +233,6 @@ def single_thread_train(model, data, optimizer, opt, log, handler, words_data=No
                     alive &= 2
                     continue
                 inputs, targets = v
-                model.zero_grad_kb()
                 optimizer.zero_grad()
                 dists = model.calc_pair_sim(inputs.to(device), opt.mapping_func)
                 loss = nn.MSELoss()(dists, targets.to(device))

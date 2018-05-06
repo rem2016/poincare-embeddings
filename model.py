@@ -158,9 +158,7 @@ class Embedding(nn.Module):
         raise NotImplemented()
 
     def zero_grad_kb(self):
-        self.k.grad = None
-        self.b.grad = None
-
+        pass
 
 class SNEmbedding(Embedding):
     def __init__(self, size, dim, dist=PoincareDistance, max_norm=1):
