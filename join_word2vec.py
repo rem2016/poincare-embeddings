@@ -161,14 +161,6 @@ def calc_pair_sim(pairs, ll):
 
 def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, queue=None):
     # setup parallel data loader
-    loader = DataLoader(
-        data,
-        batch_size=opt.batchsize,
-        shuffle=True,
-        num_workers=opt.ndproc,
-        collate_fn=data.collate
-    )
-
     words_loader = DataLoader(
         words_data,
         batch_size=100,
@@ -181,9 +173,8 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
     if opt.cold:
         loss_balance *= 0.1
     for epoch in range(opt.epochs):
-        epoch_loss = []
+        epoch_loss = [0]
         epoch_words_loss = []
-        loss = None
         data.burnin = False
         lr = opt.lr
         t_start = timeit.default_timer()
@@ -195,24 +186,13 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         elif epoch == opt.burnin:
             loss_balance = 1.0
 
-        node_iter = iter(loader)
         word_iter = iter(words_loader)
         i = 0
         alive = 3
         while alive:
             i = 1 - i
             if i == 0:
-                v = next(node_iter, None)
-                if v is None:
-                    alive &= 1
-                    continue
-                inputs, targets = v
-                optimizer.zero_grad()
-                preds = model(inputs)
-                loss = model.loss(preds, targets, size_average=True)
-                loss.backward()
-                optimizer.step(lr=lr)
-                epoch_loss.append(loss.data.item())
+                pass
             else:
                 v = next(word_iter, None)
                 if v is None:
