@@ -98,7 +98,7 @@ def calc_dist(a, b):
     return sim
 
 
-def main(n_proc=16, save_path='all_nn.tsv', save_step=100):
+def main(n_proc=1, save_path='all_nn.tsv', save_step=100):
     data_path = './wordnet/noun_closure.tsv'
     log = logging.getLogger('la')
     print(data_path)
@@ -115,7 +115,7 @@ def main(n_proc=16, save_path='all_nn.tsv', save_step=100):
         processes.append(p)
 
     all_words = get_all_eval_words()
-    all_index = [dwords[x] - len(objs) for x in all_words]
+    all_index = [dwords[x] - len(objs) for x in all_words if x in dwords]
     step = int(len(all_index) / n_proc + 0.999999999999999)
     for i in range(n_proc):
         p = mp.Process(target=calc_all, args=(queue, step * i, step * (i + 1), vec, save_step, all_index))
