@@ -86,7 +86,7 @@ def load_all_related_words(idx, objects, enames):
 
     dwords = {}
     word_vec = []
-    nlp = spacy.load('en_core_web_lg')
+    nlp = spacy.load('en_core_web_sm')
     print('Loading wordnet words')
     all_words = get_all_related_words()
     for word, token in zip(all_words, nlp(' '.join(all_words))):
