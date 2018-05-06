@@ -82,9 +82,13 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
     return np.mean(ranks), np.mean(ap_scores)
 
 
-def eval_human(_model, objs, index2word=None, use_word=False):
+def eval_human(_model, objs, index2word=None, use_word=False, method='reciprocal'):
     ev = Evaluator(_model.embedding(), objs, index2word=index2word)
-    return ev.evaluate(try_use_word=use_word)
+    if use_word and index2word is None:
+        return None
+    if method == 'cos' and not use_word:
+        raise ValueError("Cannot use cos in not word env")
+    return ev.evaluate(is_word_level=use_word, method=method)
 
 
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
@@ -103,9 +107,22 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # save model to fout
             _fout = f'{fout}/{epoch}.nth'
             log.info(f'Saving model f{_fout}')
-            log.info('Synset: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=False)))
+            log.info('Synset: ' + str(eval_human(model,
+                                                 data.objects,
+                                                 WordVectorLoader.index2word,
+                                                 method='reciprocal',
+                                                 use_word=False)))
             if w2v_nn or w2v_sim:
-                log.info('Word: ' + str(eval_human(model, data.objects, WordVectorLoader.index2word, use_word=True)))
+                log.info('Word Cos: ' + str(eval_human(model,
+                                                       data.objects,
+                                                       WordVectorLoader.index2word,
+                                                       use_word=True,
+                                                       method='cos')))
+                log.info('Word Rec: ' + str(eval_human(model,
+                                                       data.objects,
+                                                       WordVectorLoader.index2word,
+                                                       use_word=True,
+                                                       method='reciprocal')))
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,
@@ -255,7 +272,7 @@ def parse_opt(debug=False):
     parser.add_argument('-word', help='Link words to data', action='store_true', default=False)
     parser.add_argument('-override', help='Override result with the same name', action='store_true', default=False)
     parser.add_argument('-cold', help='Cold start learning embedding', action='store_true', default=False)
-    parser.add_argument('-nobalance', help='do not use balance in sim', action='store_true', default=False)
+    parser.add_argument('-nobalance', help='do not use balance in sim', action='store_true', default=True)
     parser.add_argument('-mapping_func', help='Used in sim', type=str, default='reciprocal')
     if debug:
         return parser.parse_args([])
