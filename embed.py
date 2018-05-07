@@ -38,7 +38,7 @@ def random_sample(adj, num):
     return random.sample(_data, num)
 
 
-def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
+def ranking(types, _model, distfn, sense_num=1000000, max_workers=3, mask_types=None):
     MAX_NODE_NUM = 5000  # avoid too large set (need more than 3 hour for whole noun set)
     with th.no_grad():
         lt = th.from_numpy(_model.embedding())
@@ -47,7 +47,7 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
         ap_scores = []
         lock = RLock()
 
-        def work(_s, _s_types):
+        def work(_s, _s_types, _s_mask_types):
             if _s >= sense_num:
                 return
 
@@ -61,16 +61,21 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
             for o in _s_types:
                 _dists_masked[o] = np.Inf
                 _labels[o] = 1
+            for o in _s_mask_types:
+                _dists_masked[o] = np.Inf
+                _labels[o] = 1
             # Caution
             # ignore all words
             for i in range(sense_num, len(_dists)):
                 _dists_masked[i] = np.Inf
+            _labels = _labels[:sense_num]
+
             for o in _s_types:
                 d = _dists_masked.copy()
                 d[o] = _dists[o]
                 r = np.argsort(d)
                 _ranks.append(np.where(r == o)[0][0] + 1)
-            ap = average_precision_score(_labels, -_dists)
+            ap = average_precision_score(_labels, -_dists[:sense_num])
             lock.acquire()
             ap_scores.append(ap)
             ranks += _ranks
@@ -78,7 +83,10 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3):
 
         with ThreadPoolExecutor(max_workers=max_workers) as worker:
             for s, s_types in random_sample(types, MAX_NODE_NUM):
-                worker.submit(work, s, s_types)
+                mask = []
+                if mask_types is not None:
+                    mask = mask_types[s]
+                worker.submit(work, s, s_types, mask)
     return np.mean(ranks), np.mean(ap_scores)
 
 
@@ -135,11 +143,11 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             # compute embedding quality
             log.info('Computing ranking')
             _start_time = time.time()
-            train_mrank, train_mAP = ranking(train_adj, model, distfn, len(data.objects))
+            train_mrank, train_mAP = ranking(train_adj, model, distfn, len(data.objects), mask_types=test_adj)
             mrank, mAP = train_mrank, train_mAP
             test_info = ''
             if test_adj is not None:
-                test_mrank, test_mAP = ranking(test_adj, model, distfn, len(data.objects))
+                test_mrank, test_mAP = ranking(test_adj, model, distfn, len(data.objects), mask_types=train_adj)
                 mrank, mAP = test_mrank, test_mAP
                 test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
             log.info(f'Computing finished. Used time: {time.time() - _start_time}')
