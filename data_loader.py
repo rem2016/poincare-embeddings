@@ -69,7 +69,7 @@ class SNGraphDataset(GraphDataset):
         ntries = 0
         nnegs = self.nnegs
         if self.burnin:
-            nnegs *= 0.1
+            nnegs *= self.burnin
         while ntries < self.max_tries and len(negs) < nnegs:
             if self.burnin:
                 n = randint(0, len(self.unigram_table))
@@ -210,7 +210,7 @@ class WordAsHeadDataset(GraphDataset):
         ntries = 0
         nnegs = self.nnegs
         if self.burnin:
-            nnegs *= 0.1
+            nnegs *= self.burnin
         while ntries < self.max_tries and len(negs) < nnegs:
             n = randint(0, self.sense_num)
             if n not in self._weights[t]:
@@ -247,7 +247,7 @@ class WordAsNegDataset(GraphDataset):
         ntries = 0
         nnegs = self.nnegs
         if self.burnin:
-            nnegs *= 0.1
+            nnegs *= self.burnin
         while ntries < self.max_tries and len(negs) < nnegs:
             n = randint(self.sense_num, self.sense_num + self.words_num)
             if n not in self._weights[t]:

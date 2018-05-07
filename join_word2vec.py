@@ -177,23 +177,24 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         collate_fn=data.collate
     )
 
-    loss_balance = 1.0
-    if opt.cold:
-        loss_balance *= 0.1
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
         loss = None
-        data.burnin = False
+        data.burnin = 0
         lr = opt.lr
         t_start = timeit.default_timer()
-        if epoch < opt.burnin:
-            data.burnin = True
+        if epoch < opt.burnin * 5:
+            data.burnin = (epoch + 1) / (opt.burnin * 5)
             lr = opt.lr * 0.01
             if rank == 1:
-                log.info(f'Burnin: lr={lr}')
+                log.info(f'Burnin < 5: lr={lr}')
         elif epoch == opt.burnin:
-            loss_balance = 1.0
+            lr = opt.lr * 0.1
+        elif epoch < opt.burnin * 7:
+            lr = opt.lr * 0.1
+            if rank == 1:
+                log.info(f'Burnin < 7: lr={lr}')
 
         node_iter = iter(loader)
         word_iter = iter(words_loader)
@@ -250,9 +251,4 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                      f'"k": {model.k.item()}'
                      '}')
 
-        if not opt.nobalance:
-            if epoch >= opt.burnin * opt.balance_stage:
-                loss_balance *= np.mean(epoch_loss) / np.mean(epoch_words_loss)
-                if rank == 1:
-                    log.info(f'Loss balance: {loss_balance}')
         gc.collect()
