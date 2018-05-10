@@ -219,13 +219,11 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     alive &= 2
                     continue
                 inputs, targets = v
-                model.zero_grad_kb()
                 optimizer.zero_grad()
                 dists = model.calc_pair_sim(inputs, opt.mapping_func)
                 loss = nn.MSELoss()(dists, targets) * opt.C
                 loss.backward()
                 optimizer.step(lr=lr)
-                model.update_kb(lr=lr)
                 epoch_words_loss.append(loss.data.item())
 
         elapsed = timeit.default_timer() - t_start
@@ -246,9 +244,6 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     f'"words_loss": {word_sim_loss}'
                     '}'
                 )
-            log.info('info: {'
-                     f'"k": {model.k.item()}'
-                     '}')
 
         if not opt.nobalance:
             if epoch >= opt.burnin * opt.balance_stage:

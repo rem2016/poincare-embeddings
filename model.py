@@ -97,8 +97,6 @@ class Embedding(nn.Module):
             sparse=True,
             scale_grad_by_freq=False
         )
-        self.k = th.nn.Parameter(th.ones(1))
-        self.b = th.nn.Parameter(th.ones(1) * -3)
         self.dist = dist
         self.init_weights()
 
@@ -154,17 +152,6 @@ class Embedding(nn.Module):
         elif mapping_func == 'cos':
             return self.__cos_sim(v1, v2)
         raise NotImplemented()
-
-    def update_kb(self, lr):
-        lr = 0.01 * lr
-        if self.k.grad is not None and not th.isnan(self.k.grad):
-            self.k.data = self.k - lr * self.k.grad
-        if self.b.grad is not None and not th.isnan(self.b.grad):
-            self.b.data = self.b - lr * self.b.grad
-
-    def zero_grad_kb(self):
-        self.k.grad = None
-        self.b.grad = None
 
 
 class SNEmbedding(Embedding):

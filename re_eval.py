@@ -232,6 +232,9 @@ def reeval_sim():
 
 def _load_model(state_dict, size, dim):
     _model = SNEmbedding(size, dim)
+    if 'k' in state_dict:
+        del state_dict['k']
+        del state_dict['b']
     _model.load_state_dict(state_dict)
     return _model
 
@@ -359,7 +362,7 @@ def eval_on_scws(model_info):
                 else:
                     _ans += emb[word2index[word]] * weight
         if _ans is None:
-            raise ValueError("cannot find any context word in the embedding result")
+            raise NotEmbeddingError("cannot find any context word in the embedding result")
         return _ans
 
     def _calc_sim_word_cos(td):
@@ -457,8 +460,8 @@ if __name__ == '__main__':
     for _model in models:
         try:
             re_eval_model_scws(_model)
-        except:
-            pass
+        except Exception as e:
+            print(e)
     # re_eval_model_scws(r'C:\Users\Administrator\Documents\G\model\data\LatestHuge'
     #                   r'\GRADUALLY.50d.cos.train_w2vsim_cos_imb.lr=1.0.dim=50.negs=50.burnin=20.batch=50',
     #                   'Gradually burnin')
