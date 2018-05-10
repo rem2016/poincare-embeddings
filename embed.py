@@ -84,7 +84,7 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3, mask_types=
         with ThreadPoolExecutor(max_workers=max_workers) as worker:
             for s, s_types in random_sample(types, MAX_NODE_NUM):
                 mask = []
-                if mask_types is not None:
+                if mask_types is not None and s in mask_types:
                     mask = mask_types[s]
                 worker.submit(work, s, s_types, mask)
     return np.mean(ranks), np.mean(ap_scores)
@@ -118,7 +118,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
             log.info('Synset: ' + str(eval_human(model,
                                                  data.objects,
                                                  WordVectorLoader.index2word,
-                                                 method='reciprocal',
+                                                 method='tanh',
                                                  use_word=False)))
             if w2v_nn or w2v_sim:
                 log.info('Word Cos: ' + str(eval_human(model,

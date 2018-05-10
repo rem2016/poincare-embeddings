@@ -168,7 +168,10 @@ class Evaluator:
         :param sim_metric: similarity function
         :return: maximum semantic similarity score
         """
-        return max([sim_metric(c1, c2) for c1 in syns1 for c2 in syns2] + [0])
+        sims = [sim_metric(c1, c2) for c1 in syns1 for c2 in syns2]
+        if len(sims) == 0:
+            return 0
+        return max(sims)
 
     @staticmethod
     def initialize_by_file(fin, k=None):
