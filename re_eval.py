@@ -1,5 +1,7 @@
 import numpy as np
+from sklearn.linear_model import LinearRegression
 import spacy
+from sematch.evaluation import WordSimDataset
 import torch
 from embed import ranking, get_adjacency_by_idx, eval_human
 from nltk.corpus import wordnet
@@ -19,6 +21,10 @@ from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+word_sim_data = WordSimDataset()
+simlex_pairs, simlex_human = word_sim_data.load_dataset('noun_simlex')
+simlex_pairs = list(simlex_pairs)
 
 
 class LogInfo:
@@ -126,7 +132,7 @@ class ModelInfo:
         """
         model_ = th.load(self.path_to_the_best_model())
         objs = model_['objects']
-        index2word = model_['word_index']
+        index2word = model_.get('word_index', None)
         emb = model_['model']
         model_ = _load_model(emb, emb['lt.weight'].size(0), emb['lt.weight'].size(1))
         return model_, objs, index2word, emb['lt.weight']
@@ -208,26 +214,17 @@ def reeval_rank():
 def reeval_sim():
     models = load_all_important_models()
     print('Total model num', len(models))
-    result = {}
     for name, model in models.items():
         print('=====================================')
         print(f'{name}')
         print(f'{model.log.config}')
         print(f'{model.name}')
-        ranks = []
-        maps = []
         for epoch, mino in model.load_k_models(4):
             ev = evaluation.Evaluator.initialize_by_file(mino)
             for t in ('tanh', 'neg', 'reciprocal', 'exp'):
                 corr = ev.evaluate(method=t, try_use_word=True)
                 print('{:<5}{:<10}{:<93}'.format(epoch, t, corr))
-            ranks.append(rank)
-            maps.append(mAP)
-        result[name] = {'rank': ranks, 'maps': maps}
         print()
-    display(result)
-    with open('./experiment/ans.json', 'w') as f:
-        json.dump(result, f, indent=2)
 
 
 def _load_model(state_dict, size, dim):
@@ -366,12 +363,12 @@ def eval_on_scws(model_info):
         return _ans
 
     def _calc_sim_word_cos(td):
-        if td.l_word not in word2index or td.r_word not in word2index:
+        if word2index is None or td.l_word not in word2index or td.r_word not in word2index:
             return None
         return _cos_sim(emb[word2index[td.l_word]], emb[word2index[td.r_word]])
 
     def _calc_sim_word_dist(td):
-        if td.l_word not in word2index or td.r_word not in word2index:
+        if word2index is None or td.l_word not in word2index or td.r_word not in word2index:
             return None
         return -PoincareDistance()(emb[word2index[td.l_word]], emb[word2index[td.r_word]])
 
@@ -382,10 +379,37 @@ def eval_on_scws(model_info):
             sims, human = zip(*[(float(x), float(y)) for x, y in zip(sims, human) if x is not None])
             print(f"Sims num {len(sims)}/{len(scws)}")
             return np.corrcoef(sims, human)[0, 1]
-        except TypeError:
+        except (TypeError, ValueError):
             return None
         except Exception as e:
             raise e
+
+    def _fit_simlex(*sim_funcs):
+        tds = [eval_scws.Td(x, y, x, y, s) for (x, y), s in zip(simlex_pairs, simlex_human)]
+        _preds = [[sim_func(td) for sim_func in sim_funcs] for td in tds]
+        _X = []
+        _y = []
+        for _pred, score in zip(_preds, simlex_human):
+            if any((x is None for x in _pred)):
+                continue
+            _X.append([float(x) for x in _pred])
+            _y.append(score)
+        if len(_X) == 0:
+            return None
+        _lr = LinearRegression()
+        _lr.fit(_X, _y)
+        print(f'Fit simlex, final corr with simlex = {np.corrcoef(_lr.predict(_X), _y)[0, 1]}')
+        return _lr
+
+    def _calc_sim_lr_simlex(td):
+        a = _calc_sim_closest(td)
+        b = _calc_sim_word_dist(td)
+        return a is None or b is None or lr is None or lr.predict([[a, b]])
+
+    def _calc_sim_lr_simlex_context(td):
+        a = _calc_sim(td)
+        b = _calc_sim_word_dist(td)
+        return a is None or b is None or lr is None or lr.predict([[a, b]])
 
     def _word2vec_sim(td):
         a = nlp(td.l_word)
@@ -406,13 +430,16 @@ def eval_on_scws(model_info):
     model_, objs, index2word, emb = model_info.load_model()
     iobjs = {name: i for i, name in enumerate(objs)}
     word2index = {name: i for i, name in enumerate(index2word)} if index2word is not None else None
+    lr = _fit_simlex(_calc_sim_closest, _calc_sim_word_dist)
     print("Model loading finished. Start calculating")
     ans = {}
-    ans['no_idf'] = _eval(_calc_sim)
-    ans['with_idf'] = _eval(lambda t: _calc_sim(t, use_idf=True))
+    ans['no_idf_context'] = _eval(_calc_sim)
+    ans['with_idf_context'] = _eval(lambda t: _calc_sim(t, use_idf=True))
     ans['closest'] = _eval(_calc_sim_closest)
     ans['word_cos'] = _eval(_calc_sim_word_cos)
     ans['word_dist'] = _eval(_calc_sim_word_dist)
+    ans['lr_closest'] = _eval(_calc_sim_lr_simlex)
+    ans['lr_context'] = _eval(_calc_sim_lr_simlex_context)
     # ans['word2vec'] = _eval(_word2vec_sim)  # 0.64454779 1323/1328
     return ans
 
@@ -452,7 +479,7 @@ def re_eval_model_scws(path, name=''):
     model_info = ModelInfo(path)
     print(eval_on_scws(model_info))
     print('Used time', time.time() - start)
-    print('======================================')
+    print('======================================\n\n\n')
 
 
 if __name__ == '__main__':
@@ -461,7 +488,7 @@ if __name__ == '__main__':
         try:
             re_eval_model_scws(_model)
         except Exception as e:
-            print(e)
+            raise e
     # re_eval_model_scws(r'C:\Users\Administrator\Documents\G\model\data\LatestHuge'
     #                   r'\GRADUALLY.50d.cos.train_w2vsim_cos_imb.lr=1.0.dim=50.negs=50.burnin=20.batch=50',
     #                   'Gradually burnin')

@@ -24,7 +24,7 @@ class Td:
 
     @staticmethod
     def _index(words, word):
-        for i in range(1, len(words)):
+        for i in range(len(words)):
             if words[i].lower() == word.lower():
                 return i
         raise ValueError(f'{words} [{word}]')
