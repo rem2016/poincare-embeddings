@@ -23,8 +23,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 word_sim_data = WordSimDataset()
-simlex_pairs, simlex_human = word_sim_data.load_dataset('noun_simlex')
+simlex_pairs, simlex_human = word_sim_data.load_dataset('noun_ws353')
 simlex_pairs = list(simlex_pairs)
+datasets = ['noun_rg', 'noun_mc', 'noun_ws353', 'noun_ws353-sim', 'noun_simlex']
+ground_truth_pairs = [word_sim_data.load_dataset(dataset) for dataset in datasets]
 
 
 class LogInfo:
@@ -377,7 +379,7 @@ def eval_on_scws(model_info):
             sims = [func(t) for t in scws]
             human = [t.score for t in scws]
             sims, human = zip(*[(float(x), float(y)) for x, y in zip(sims, human) if x is not None])
-            print(f"Sims num {len(sims)}/{len(scws)}")
+            print(f"        Sims num {len(sims)}/{len(scws)}")
             return np.corrcoef(sims, human)[0, 1]
         except (TypeError, ValueError):
             return None
@@ -420,6 +422,26 @@ def eval_on_scws(model_info):
             return None
         return _cos_sim(torch.Tensor(va), torch.Tensor(vb))
 
+    def _calc_all_sim_lr():
+        if lr is None:
+            return None
+
+        def __eval(_p, _hs):
+            tds = [eval_scws.Td(x, y, x, y, s) for (x, y), s in zip(_p, _hs)]
+            X = [[_calc_sim_closest(td), _calc_sim_word_dist(td)] for td in tds]
+            y = [h for _x, h in zip(X, _hs) if _x[0] is not None and _x[1] is not None]
+            X = [_x for _x in X if _x[0] is not None and _x[1] is not None]
+            if len(X) == 0:
+                return None
+            pred = lr.predict(X)
+            return np.corrcoef(pred, y)[0, 1]
+
+        _ret = {}
+        for name, data in zip(datasets, ground_truth_pairs):
+            pairs, human = data
+            _ret[name] = __eval(pairs, human)
+        return _ret
+
     start = time.time()
     scws = _load_scws_data()
     print(time.time() - start)
@@ -440,6 +462,7 @@ def eval_on_scws(model_info):
     ans['word_dist'] = _eval(_calc_sim_word_dist)
     ans['lr_closest'] = _eval(_calc_sim_lr_simlex)
     ans['lr_context'] = _eval(_calc_sim_lr_simlex_context)
+    ans['all_sim_lr'] = _calc_all_sim_lr()
     # ans['word2vec'] = _eval(_word2vec_sim)  # 0.64454779 1323/1328
     return ans
 
@@ -477,7 +500,8 @@ def re_eval_model_scws(path, name=''):
     print(path)
     start = time.time()
     model_info = ModelInfo(path)
-    print(eval_on_scws(model_info))
+    for k, v in eval_on_scws(model_info).items():
+        print('- {: <22}{: <22}'.format(str(k), str(v)))
     print('Used time', time.time() - start)
     print('======================================\n\n\n')
 
