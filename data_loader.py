@@ -69,7 +69,7 @@ class SNGraphDataset(GraphDataset):
         ntries = 0
         nnegs = self.nnegs
         if self.burnin:
-            nnegs *= 0.1
+            nnegs *= 0.5  # !!!! Changed
         while ntries < self.max_tries and len(negs) < nnegs:
             if self.burnin:
                 n = randint(0, len(self.unigram_table))

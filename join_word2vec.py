@@ -178,8 +178,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
     )
 
     loss_balance = 1.0
-    if opt.cold:
-        loss_balance *= 0.1
+    opt.burnin *= 2
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
@@ -189,7 +188,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
         t_start = timeit.default_timer()
         if epoch < opt.burnin:
             data.burnin = True
-            lr = opt.lr * 0.01
+            lr = opt.lr * 0.1  # !!!!!!!!!!!!!!!!!!!!!! to 0.1 rather than 0.01
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
         elif epoch == opt.burnin:
