@@ -171,7 +171,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
     words_loader = DataLoader(
         words_data,
-        batch_size=100,
+        batch_size=2,
         shuffle=True,
         num_workers=opt.ndproc,
         collate_fn=words_data.collate
@@ -183,6 +183,8 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
     for epoch in range(opt.epochs):
         epoch_loss = []
         epoch_words_loss = []
+        epoch_w_loss = []
+        epoch_l_loss = []
         loss = None
         data.burnin = False
         lr = opt.lr
@@ -231,6 +233,8 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
 
                 optimizer.step(lr=lr)
                 epoch_words_loss.append(w_loss.data.item() + l_loss.data.item())
+                epoch_w_loss.append(w_loss.data.item())
+                epoch_l_loss.append(l_loss.data.item())
 
         elapsed = timeit.default_timer() - t_start
         if rank == 1:
@@ -242,6 +246,10 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 queue.put(
                     (epoch, elapsed, np.mean(epoch_loss), emb, word_sim_loss)
                 )
+                log.info('split_loss: {'
+                         f'"w_loss": {np.mean(epoch_w_loss)}'
+                         f'"l_loss": {np.mean(epoch_l_loss)}'
+                         '}')
             else:
                 log.info(
                     'info: {'
