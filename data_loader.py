@@ -10,6 +10,7 @@ from word_vec_loader import WordVectorLoader
 from torch.autograd import Function, Variable
 from torch.utils.data import Dataset
 from collections import defaultdict as ddict
+import copy
 
 eps = 1e-5
 
@@ -42,6 +43,7 @@ class GraphDataset(Dataset):
             exp_num = len(objects) + len(WordVectorLoader.word2index)
             assert exp_num == nents, \
                 f'Number of objects do no match {exp_num} != {nents}'
+        self.total_nodes_num = nents
 
         if unigram_size > 0:
             c = self._counts ** self._dampening
@@ -63,20 +65,13 @@ class GraphDataset(Dataset):
 class SNGraphDataset(GraphDataset):
     model_name = '%s_%s_dim%d'
 
-    def __getitem__(self, i):
-        t, h, _ = [int(x) for x in self.idx[i]]
+    @staticmethod
+    def make(t, h, size, adj, nnegs, max_tries=500):
         negs = set()
         ntries = 0
-        nnegs = self.nnegs
-        if self.burnin:
-            nnegs *= 0.1
-        while ntries < self.max_tries and len(negs) < nnegs:
-            if self.burnin:
-                n = randint(0, len(self.unigram_table))
-                n = int(self.unigram_table[n])
-            else:
-                n = randint(0, len(self.objects))
-            if n not in self._weights[t]:
+        while ntries < max_tries and len(negs) < nnegs:
+            n = randint(0, size)
+            if n not in adj[t]:
                 negs.add(n)
             ntries += 1
         if len(negs) == 0:
@@ -85,6 +80,61 @@ class SNGraphDataset(GraphDataset):
         while len(ix) < nnegs + 2:
             ix.append(ix[randint(2, len(ix))])
         return th.LongTensor(ix).view(1, len(ix)), th.zeros(1).long()
+
+    def __getitem__(self, i):
+        t, h, _ = [int(x) for x in self.idx[i]]
+        nnegs = self.nnegs
+        if self.burnin:
+            nnegs *= 0.2
+        return self.make(t,
+                         h,
+                         self.total_nodes_num,
+                         self._weights,
+                         self.nnegs,
+                         self.max_tries)
+
+    @classmethod
+    def initialize(cls, distfn, opt, idx, objects, max_norm=1, node_num=None):
+        if node_num is None:
+            node_num = len(objects)
+        conf = []
+        model_name = cls.model_name % (opt.dset, opt.distfn, opt.dim)
+        data = cls(idx, objects, opt.negs)
+        model = SNEmbedding(
+            node_num,
+            opt.dim,
+            dist=distfn,
+            max_norm=max_norm
+        )
+        data.objects = objects
+        return model, data, model_name, conf
+
+    @classmethod
+    def initialize_word2vec_nn(cls, distfn, opt, idx, objects):
+        import join_word2vec
+        conf = []
+        model_name = cls.model_name % (opt.dset, opt.distfn, opt.dim)
+        data = cls(idx, objects, opt.negs)
+        model = join_word2vec.SNEmbeddingWithWord(
+            len(data.objects),
+            opt.dim,
+            sense_num=len(objects),
+            hidden_size=opt.nn_hidden_size,
+            layer_size=opt.nn_hidden_layer
+        )
+        data.objects = objects
+        return model, data, model_name, conf
+
+
+class OnlySynsetDataset(SNGraphDataset):
+    def __init__(self, idx, objects, nnegs, unigram_size=1e8):
+        _idx = []
+        for h, t, w in idx:
+            if h >= len(objects) or t >= len(objects):
+                continue
+            _idx.append([h, t, w])
+        _idx = np.array(_idx)
+        super().__init__(idx, objects, nnegs, unigram_size)
 
     @classmethod
     def initialize(cls, distfn, opt, idx, objects, max_norm=1, node_num=None):
@@ -131,8 +181,12 @@ def is_perfect_sim(sim):
 class WordsDataset(Dataset):
     # pay attention to sense num
     # except from output, all index is based on word vec !!
-    def __init__(self, word_vec: np.array, sense_num: int, sim_adj: dict,
-                 pair_per_word: int=100, max_pairs=200):
+    def __init__(self, word_vec: np.array,
+                 sense_num: int,
+                 sim_adj: dict,
+                 link_adj: dict,
+                 pair_per_word: int = 100,
+                 max_pairs=200):
         self.npair = max(pair_per_word, max_pairs)
         self.word_vec = np.array(word_vec)
         self.sense_num = sense_num
@@ -142,12 +196,13 @@ class WordsDataset(Dataset):
         self.max_pairs = max_pairs
         self.adj = [{} for _ in range(len(word_vec))]
         self.init_adj(sim_adj)
+        self.link_adj = link_adj
 
     def __calc_dist(self, a, b):
         sim = np.sum(a * b, axis=-1) / (norm(a, axis=-1) * norm(b, axis=-1))
         return sim
 
-    def __getitem__(self, index):
+    def __get_word(self, index):
         b_indexes = list(np.random.choice(self.word_num, self.npair))
         a_v = np.expand_dims(self.word_vec[index], 0)
         b_vs = self.word_vec[b_indexes]
@@ -171,6 +226,23 @@ class WordsDataset(Dataset):
         return th.LongTensor([[index + self.sense_num, b_index + self.sense_num] for b_index in b_indexes]), \
                th.Tensor(sim)
 
+    def __get_link(self, index):
+        index = index + self.sense_num
+        linked = self.link_adj[index]
+        nodes_data = [SNGraphDataset.make(index,
+                                          link,
+                                          self.sense_num + self.word_num,
+                                          self.link_adj,
+                                          nnegs=20)
+                      for link in linked]
+        inputs, targets = zip(*nodes_data)
+        return Variable(th.cat(inputs, 0)), Variable(th.cat(targets, 0))
+
+    def __getitem__(self, index):
+        words_input, words_target = self.__get_word(index)
+        links_input, links_target = self.__get_link(index)
+        return words_input, words_target, links_input, links_target
+
     def init_adj(self, sim_adj):
         for i in range(len(self.word_vec)):
             v = self.word_vec[i]
@@ -191,6 +263,12 @@ class WordsDataset(Dataset):
 
     def __len__(self):
         return self.word_num
+
+    @classmethod
+    def collate(cls, batch):
+        inputs_w, targets_w, inputs_n, targets_n = zip(*batch)
+        return Variable(th.cat(inputs_w, 0)), Variable(th.cat(targets_w, 0)), \
+               Variable(th.cat(inputs_n, 0)), Variable(th.cat(targets_n, 0))
 
 
 class WordAsHeadDataset(GraphDataset):

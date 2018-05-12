@@ -322,12 +322,12 @@ def start_predicting(opt, log, debug=False):
     word_as_head_data = None
     word_as_neg_data = None
     if opt.w2v_nn:
-        _model, data, model_name, conf = data_loader.SNGraphDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
+        _model, data, model_name, conf = data_loader.OnlySynsetDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
         word_as_head_data = data_loader.WordAsHeadDataset(idx, objects, opt.negs, sense_num=len(objects))
         word_as_neg_data = data_loader.WordAsNegDataset(idx, objects, opt.negs, words_num=len(dwords))
     else:
         num = len(objects) + (len(dwords) if dwords is not None else 0)
-        _model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects, node_num=num)
+        _model, data, model_name, conf = data_loader.OnlySynsetDataset.initialize(distfn, opt, idx, objects, node_num=num)
 
     # Build config string for log
     conf = [
@@ -357,7 +357,8 @@ def start_predicting(opt, log, debug=False):
                                       handler,
                                       words_data=WordsDataset(WordVectorLoader.word_vec,
                                                               WordVectorLoader.sense_num,
-                                                              WordVectorLoader.word_sim_adj),
+                                                              WordVectorLoader.word_sim_adj,
+                                                              train_adjacency),
                                       w_head_data=word_as_head_data,
                                       w_neg_data=word_as_neg_data)
         else:
@@ -376,8 +377,10 @@ def start_predicting(opt, log, debug=False):
         for rank in range(opt.nproc):
             if opt.w2v_sim:
                 print('sim')
-                word_data = WordsDataset(WordVectorLoader.word_vec, sense_num=len(objects),
-                                         sim_adj=WordVectorLoader.word_sim_adj)
+                word_data = WordsDataset(WordVectorLoader.word_vec,
+                                         sense_num=len(objects),
+                                         sim_adj=WordVectorLoader.word_sim_adj,
+                                         link_adj=train_adjacency)
                 p = concurrent_method(
                     target=join_word2vec.combine_w2v_sim_train,
                     args=(_model, data, word_data, optimizer, opt, log, rank + 1, queue)
