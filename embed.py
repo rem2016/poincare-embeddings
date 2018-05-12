@@ -366,6 +366,9 @@ def start_predicting(opt, log, debug=False):
         _model, data, model_name, conf = data_loader.OnlySynsetDataset.initialize_word2vec_nn(distfn, opt, idx, objects)
         word_as_head_data = data_loader.WordAsHeadDataset(idx, objects, opt.negs, sense_num=len(objects))
         word_as_neg_data = data_loader.WordAsNegDataset(idx, objects, opt.negs, words_num=len(dwords))
+    elif opt.word:
+        num = len(objects) + (len(dwords) if dwords is not None else 0)
+        _model, data, model_name, conf = data_loader.SNGraphDataset.initialize(distfn, opt, idx, objects, node_num=num)
     else:
         num = len(objects) + (len(dwords) if dwords is not None else 0)
         _model, data, model_name, conf = data_loader.OnlySynsetDataset.initialize(distfn, opt, idx, objects, node_num=num)
@@ -436,7 +439,7 @@ def start_predicting(opt, log, debug=False):
             processes.append(p)
 
         control_params = (queue, log, train_adjacency, test_adjacency, data,
-                          opt.fout, distfn, opt.epochs, processes, opt.w2v_nn, opt.w2v_sim)
+                          opt.fout, distfn, opt.epochs, processes, opt.w2v_nn or opt.word, opt.w2v_sim)
         if not debug:
             ctrl = mp.Process(
                 target=control,
