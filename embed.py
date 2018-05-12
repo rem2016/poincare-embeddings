@@ -48,10 +48,12 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3, mask_types=
         lock = RLock()
 
         def work(_s, _s_types, _s_mask_types):
-            if word_only and _s < sense_num:
-                return
-            elif _s >= sense_num:
-                return
+            if word_only:
+                if _s < sense_num:
+                    return
+            else:
+                if _s >= sense_num:
+                    return
 
             nonlocal ranks
             s_e = Variable(lt[_s].expand_as(embedding))
@@ -184,7 +186,8 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                 mrank, mAP = test_mrank, test_mAP
                 test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
             if w2v_nn or w2v_sim:
-                word_mrank, word_mAP = ranking(train_adj, model, distfn, len(data.objects),
+                word_mrank, word_mAP = ranking(train_adj, model, distfn,
+                                               sense_num=len(data.objects),
                                                mask_types=test_adj,
                                                word_only=True)
                 test_info += f', word_rank: {word_mrank}, word_mAP: {word_mAP}'
