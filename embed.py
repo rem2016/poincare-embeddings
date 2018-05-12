@@ -38,7 +38,7 @@ def random_sample(adj, num):
     return random.sample(_data, num)
 
 
-def ranking(types, _model, distfn, sense_num=1000000, max_workers=3, mask_types=None):
+def ranking(types, _model, distfn, sense_num=1000000, max_workers=3, mask_types=None, word_only=False):
     MAX_NODE_NUM = 5000  # avoid too large set (need more than 3 hour for whole noun set)
     with th.no_grad():
         lt = th.from_numpy(_model.embedding())
@@ -48,7 +48,9 @@ def ranking(types, _model, distfn, sense_num=1000000, max_workers=3, mask_types=
         lock = RLock()
 
         def work(_s, _s_types, _s_mask_types):
-            if _s >= sense_num:
+            if word_only and _s < sense_num:
+                return
+            elif _s >= sense_num:
                 return
 
             nonlocal ranks
@@ -108,8 +110,9 @@ def eval_corr(_model, objs, index2word):
     for a, items in WordVectorLoader.word_sim_adj.items():
         for b, sim in items.items():
             inputs[(a, b)] = sim
+    _num = len(inputs)
 
-    while len(inputs) < 10000 and times:
+    while len(inputs) - _num < 100000 and times:
         a = random.randint(len(objs), len(index2word) - 1)
         b = random.randint(len(objs), len(index2word) - 1)
         pair = (a, b)
@@ -121,7 +124,10 @@ def eval_corr(_model, objs, index2word):
 
     ground = list(inputs.values())
     pred = [cos_sim(emb[a], emb[b]) for a, b in inputs.keys()]
-    return np.corrcoef(ground, pred)[0, 1]
+    ans = {'score': np.corrcoef(ground, pred)[0, 1],
+           'total_size': len(pred),
+           'preset_size': _num}
+    return ans
 
 
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
@@ -157,7 +163,7 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                                                        use_word=True,
                                                        method='reciprocal')))
                 corr_with_w2v = eval_corr(model, data.objects, WordVectorLoader.index2word)
-                log.info(f"{{CorrWithWord2Vec: {corr_with_w2v}}}")
+                log.info(f"{{CorrWithWord2Vec: {str(corr_with_w2v)}}}")
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,
@@ -177,6 +183,11 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                 test_mrank, test_mAP = ranking(test_adj, model, distfn, len(data.objects), mask_types=train_adj)
                 mrank, mAP = test_mrank, test_mAP
                 test_info = f', test_mean_rank: {test_mrank}, test_mAP: {test_mAP}, word_sim_loss: {word_sim_loss}'
+            if w2v_nn or w2v_sim:
+                word_mrank, word_mAP = ranking(train_adj, model, distfn, len(data.objects),
+                                               mask_types=test_adj,
+                                               word_only=True)
+                test_info += f', word_rank: {word_mrank}, word_mAP: {word_mAP}'
             log.info(f'Computing finished. Used time: {time.time() - _start_time}')
 
             if mrank < min_rank[0]:
