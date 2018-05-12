@@ -15,7 +15,7 @@ import logging
 import threading
 import argparse
 from threading import RLock
-from evaluation import Evaluator
+from evaluation import Evaluator, cos_sim
 from torch.autograd import Variable
 from concurrent.futures import ThreadPoolExecutor
 from word_vec_loader import WordVectorLoader
@@ -99,6 +99,31 @@ def eval_human(_model, objs, index2word=None, use_word=False, method='reciprocal
     return ev.evaluate(is_word_level=use_word, method=method)
 
 
+def eval_corr(_model, objs, index2word):
+    emb = _model.embedding()
+    t_emb = WordVectorLoader.word_vec
+    s_num = WordVectorLoader.sense_num
+    inputs = {}
+    times = 10
+    for a, items in WordVectorLoader.word_sim_adj.items():
+        for b, sim in items.items():
+            inputs[(a, b)] = sim
+
+    while len(inputs) < 10000 and times:
+        a = random.randint(len(objs), len(index2word) - 1)
+        b = random.randint(len(objs), len(index2word) - 1)
+        pair = (a, b)
+        if pair not in inputs:
+            inputs[pair] = cos_sim(t_emb[a - s_num], t_emb[b - s_num])
+            times = 10
+        else:
+            times -= 1
+
+    ground = list(inputs.values())
+    pred = [cos_sim(emb[a], emb[b]) for a, b in inputs.keys()]
+    return np.corrcoef(ground, pred)[0, 1]
+
+
 def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, processes, w2v_nn, w2v_sim):
     min_rank = (np.Inf, -1)
     max_map = (0, -1)
@@ -131,6 +156,8 @@ def control(queue, log, train_adj, test_adj, data, fout, distfn, nepochs, proces
                                                        WordVectorLoader.index2word,
                                                        use_word=True,
                                                        method='reciprocal')))
+                corr_with_w2v = eval_corr(model, data.objects, WordVectorLoader.index2word)
+                log.info(f"{{CorrWithWord2Vec: {corr_with_w2v}}}")
             th.save({
                 'model': model.state_dict(),
                 'epoch': epoch,

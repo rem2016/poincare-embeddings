@@ -21,6 +21,10 @@ mapping_methods = {
 }
 
 
+def cos_sim(x, y):
+    return np.sum(x*y, axis=-1) / (norm(x) * norm(y))
+
+
 class NoExistError(ValueError):
     pass
 
