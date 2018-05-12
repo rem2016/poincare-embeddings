@@ -194,7 +194,11 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
             lr = opt.lr * 0.01
             if rank == 1:
                 log.info(f'Burnin: lr={lr}')
-        elif epoch == opt.burnin:
+        elif epoch < opt.burnin * 2:
+            lr = opt.lr * 0.1
+            if rank == 1:
+                log.info(f'Burnin: lr={lr}')
+        if epoch == opt.burnin:
             loss_balance = 1.0
 
         node_iter = iter(loader)
@@ -211,7 +215,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 inputs, targets = v
                 optimizer.zero_grad()
                 preds = model(inputs)
-                loss = model.loss(preds, targets, size_average=True)
+                loss = model.loss(preds, targets, size_average=True) * 0.2
                 loss.backward()
                 optimizer.step(lr=lr)
                 epoch_loss.append(loss.data.item())
@@ -228,7 +232,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 w_loss.backward()
                 # linked loss (on word only)
                 preds = model(n_inputs)
-                l_loss = model.loss(preds, n_targets, size_average=True)
+                l_loss = model.loss(preds, n_targets, size_average=True) * 0.2
                 l_loss.backward()
 
                 optimizer.step(lr=lr)
