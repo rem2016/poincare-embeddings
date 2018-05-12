@@ -220,14 +220,17 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                     continue
                 w_inputs, w_targets, n_inputs, n_targets = v
                 optimizer.zero_grad()
+                # words loss
                 dists = model.calc_pair_sim(w_inputs, opt.mapping_func)
-                loss = nn.MSELoss()(dists, w_targets) * opt.C
-                loss.backward()
+                w_loss = nn.MSELoss()(dists, w_targets) * opt.C
+                w_loss.backward()
+                # linked loss (on word only)
                 preds = model(n_inputs)
-                loss = model.loss(preds, n_targets, size_average=True)
-                loss.backward()
+                l_loss = model.loss(preds, n_targets, size_average=True)
+                l_loss.backward()
+
                 optimizer.step(lr=lr)
-                epoch_words_loss.append(loss.data.item())
+                epoch_words_loss.append(w_loss.data.item() + l_loss.data.item())
 
         elapsed = timeit.default_timer() - t_start
         if rank == 1:
