@@ -215,7 +215,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 inputs, targets = v
                 optimizer.zero_grad()
                 preds = model(inputs)
-                loss = model.loss(preds, targets, size_average=True) * 0.2
+                loss = model.loss(preds, targets, size_average=True) * 0.4
                 loss.backward()
                 optimizer.step(lr=lr)
                 epoch_loss.append(loss.data.item())
@@ -232,7 +232,7 @@ def combine_w2v_sim_train(model, data, words_data, optimizer, opt, log, rank=1, 
                 w_loss.backward()
                 # linked loss (on word only)
                 preds = model(n_inputs)
-                l_loss = model.loss(preds, n_targets, size_average=True) * 0.2
+                l_loss = model.loss(preds, n_targets, size_average=True) * 0.4
                 l_loss.backward()
 
                 optimizer.step(lr=lr)
