@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from word_vec_loader import WordVectorLoader
 import spacy
 from sematch.evaluation import WordSimDataset
 import torch
@@ -19,15 +20,13 @@ import re
 import pickle
 from collections import defaultdict
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 word_sim_data = WordSimDataset()
 refer_pairs, refer_human_ground_truth = word_sim_data.load_dataset('noun_rg')
 refer_pairs = list(refer_pairs)
 datasets = ['noun_rg', 'noun_mc', 'noun_ws353', 'noun_ws353-sim', 'noun_simlex']
 ground_truth_pairs = [word_sim_data.load_dataset(dataset) for dataset in datasets]
-nlp = spacy.load('en_core_web_lg')
 
 
 class LogInfo:
@@ -68,6 +67,9 @@ class LogInfo:
         config = {}
         ev = []
         ks = [1]
+        if not os.path.exists(file_path):
+            return cls(config, loss, ev, ks)
+
         with open(file_path) as f:
             for line in f:
                 try:
@@ -481,6 +483,7 @@ def eval_on_scws(model_info):
     scws = _load_scws_data()
     tfidf = eval_scws.Tfidf()
     tfidf.fit()
+    nlp = spacy.load('en_core_web_lg')
 
     model_, objs, index2word, emb = model_info.load_model()
     iobjs = {name: i for i, name in enumerate(objs)}
@@ -498,6 +501,135 @@ def eval_on_scws(model_info):
     ans['closest_sim'] = _calc_closest_sim()
     ans['all_sim_lr'] = _calc_all_sim_lr()
     # ans['word2vec'] = _eval(_word2vec_sim)  # 0.64454779 1323/1328
+    return ans
+
+
+def find_node_nn(_emb, emb, index2word, objs):
+    dist = PoincareDistance()(_emb, emb)
+    dist = dist.numpy()
+    sorted_index = dist.argsort()
+    dist.sort()
+    nearest_neighbors = {}
+    for i, b in zip(sorted_index, dist):
+        if i >= len(objs):
+            nearest_neighbors[index2word[i]] = b
+        if len(nearest_neighbors) == 10:
+            break
+
+    nearest_neighbors_synsets = {}
+    for i, b in zip(sorted_index, dist):
+        if i < len(objs):
+            nearest_neighbors_synsets[index2word[i]] = b
+        if len(nearest_neighbors_synsets) == 10:
+            break
+    return nearest_neighbors, nearest_neighbors_synsets
+
+
+def find_node_nn_cos(_emb, emb, index2word, objs):
+    def _cos_sim(v1, v2):
+        def norm(v):
+            return th.sqrt(th.sum(v**2, -1))
+
+        _norm = (norm(v1) * norm(v2))
+        ret = th.sum(v1 * v2, dim=-1) / _norm
+        return ret.squeeze(-1)
+
+    dist = -_cos_sim(_emb, emb).numpy()
+    sorted_index = dist.argsort()
+    dist.sort()
+    nearest_neighbors = {}
+    for i, b in zip(sorted_index, dist):
+        if i >= len(objs):
+            nearest_neighbors[index2word[i]] = b
+        if len(nearest_neighbors) == 10:
+            break
+    return nearest_neighbors
+
+
+def find_nearest_neighbor(model_info, words):
+    def norm(v):
+        return th.sqrt(th.sum(v**2, -1))
+
+    model_, objs, index2word, emb = model_info.load_model()
+    if index2word is None:
+        index2word = objs
+
+    iobjs = {name: i for i, name in enumerate(objs)}
+    word2index = {name: i for i, name in enumerate(index2word)} if index2word is not None else None
+    for i, name in enumerate(objs):
+        index2word[i] = name
+
+    ans = {}
+    for word in words:
+        if word in iobjs:
+            index = iobjs[word]
+        elif word in word2index:
+            index = word2index[word]
+        else:
+            print("ERROR", word)
+            continue
+
+        _emb = emb[index]
+        r = norm(_emb).item()
+        _emb = _emb.expand_as(emb)
+        nearest_neighbors, nearest_neighbors_synsets = find_node_nn(_emb, emb, index2word, objs)
+        ans[word] = {}
+        ans[word]['words'] = nearest_neighbors
+        ans[word]['synsets'] = nearest_neighbors_synsets
+        ans[word]['cos_words'] = find_node_nn_cos(_emb, emb, index2word, objs)
+        ans[word]['__norm__'] = r
+    return ans
+
+
+def find_nn_using_w2v(words):
+    def _cos_sim(v1, v2):
+        def norm(v):
+            return np.sqrt(np.sum(v**2, -1))
+
+        _norm = (norm(v1) * norm(v2))
+        ret = np.sum(v1 * v2, axis=1) / _norm
+        if len(ret.shape) == 1:
+            return ret
+        elif len(ret.shape) == 2:
+            return ret[:, 0]
+        raise ValueError(f'ret with shape {ret.shape}')
+
+    idx, objs, dwords = slurp('./wordnet/noun_closure.tsv',
+                              load_word=True,
+                              build_word_vector=True)
+
+    index2word = WordVectorLoader.index2word
+    if index2word is None:
+        index2word = objs
+
+    word2index = {name: i for i, name in enumerate(index2word)} if index2word is not None else None
+    for i, name in enumerate(objs):
+        index2word[i] = name
+
+    vec = WordVectorLoader.word_vec
+
+    ans = {}
+    for word in words:
+        index = word2index[word]
+        _emb = vec[index - len(objs)]
+        dist = -_cos_sim(_emb, vec)
+        sorted_index = dist.argsort()
+        nearest_neighbors = [index2word[i + len(objs)] for i in sorted_index]
+        ans[word] = nearest_neighbors[1: 20]
+    return ans
+
+
+def fnn_model(path, words, has_word=False, name=''):
+    print('=============================================')
+    print(f'\n      Start: {name}\n')
+    print('=============================================')
+    print(path)
+    start = time.time()
+    model_info = ModelInfo(path)
+    ans = find_nearest_neighbor(model_info, words)
+    display(ans)
+    print('Used time', time.time() - start)
+    print('======================================')
     return ans
 
 
@@ -542,8 +674,16 @@ def re_eval_model_scws(path, name=''):
 
 
 if __name__ == '__main__':
-    re_rank_model(r"C:\Users\Administrator\Documents\G\model\data\PURE10d")
-    re_eval_model_scws(r"C:\Users\Administrator\Documents\G\model\data\PURE10d")
+    words = ['fatness', 'bank', 'a', 'money', 'dog', 'Stanford', 'Washington', 'window', 'computer']
+    gd = find_nn_using_w2v(words=words)
+    display(gd)
+    a = fnn_model(r'..\model\model\Save514COS\513.noun.80d.cos.train_w2vsim_cos_imb.lr=1.0.dim=80.negs=50.burnin=20.batch=50',
+              words=words)
+    b = fnn_model(r'..\model\model\Save514RECI\513.noun.80d.cos.train_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=40.batch=50',
+              words=words,
+              name='REC')
+    # re_rank_model(r"C:\Users\Administrator\Documents\G\model\data\PURE10d")
+    # re_eval_model_scws(r"C:\Users\Administrator\Documents\G\model\data\PURE10d")
     # re_rank_model(r'C:\Users\Administrator\Documents\G\model\data\80D512\80D_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=20.batch=50')
     # re_eval_model_scws(r'C:\Users\Administrator\Documents\G\model\data\80D512\80D_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=20.batch=50')
     # models = load_all_important_models()

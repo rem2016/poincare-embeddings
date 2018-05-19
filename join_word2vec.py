@@ -10,7 +10,11 @@ from torch import nn
 if th.cuda.is_available():
     device = th.device('cuda')
 else:
-    device = th.device('cpu')
+    try:
+        device = th.device('cpu')
+    except Exception as e:
+        print(e)
+
 
 
 class WordModel(nn.Module):
