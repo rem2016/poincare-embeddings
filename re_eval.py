@@ -436,9 +436,9 @@ def eval_on_scws(model_info):
             tds = [eval_scws.Td(x, y, x, y, s) for (x, y), s in zip(_p, _hs)]
             X = [[_calc_sim_closest(td), _calc_sim_word_cos(td)] for td in tds]
             x1s = [x[1] for x in X if x[1] is not None]
-            mean_x1 = sum(x1s) / len(x1s)
+            mean_x1 = sum(x1s) / (len(x1s) + 1e-6)
             x0s = [x[0] for x in X if x[0] is not None]
-            mean_x0 = sum(x0s) / len(x0s)
+            mean_x0 = sum(x0s) / (len(x0s) + 1e-6)
             pred = []
             y = []
             for _x, _h in zip(X, _hs):
@@ -509,18 +509,18 @@ def find_node_nn(_emb, emb, index2word, objs):
     dist = dist.numpy()
     sorted_index = dist.argsort()
     dist.sort()
-    nearest_neighbors = {}
+    nearest_neighbors = []
     for i, b in zip(sorted_index, dist):
         if i >= len(objs):
-            nearest_neighbors[index2word[i]] = b
-        if len(nearest_neighbors) == 10:
+            nearest_neighbors.append((index2word[i], b))
+        if len(nearest_neighbors) == 20:
             break
 
-    nearest_neighbors_synsets = {}
+    nearest_neighbors_synsets = []
     for i, b in zip(sorted_index, dist):
         if i < len(objs):
-            nearest_neighbors_synsets[index2word[i]] = b
-        if len(nearest_neighbors_synsets) == 10:
+            nearest_neighbors_synsets.append((index2word[i], b))
+        if len(nearest_neighbors_synsets) == 20:
             break
     return nearest_neighbors, nearest_neighbors_synsets
 
@@ -541,7 +541,7 @@ def find_node_nn_cos(_emb, emb, index2word, objs):
     for i, b in zip(sorted_index, dist):
         if i >= len(objs):
             nearest_neighbors[index2word[i]] = b
-        if len(nearest_neighbors) == 10:
+        if len(nearest_neighbors) == 20:
             break
     return nearest_neighbors
 
@@ -674,14 +674,17 @@ def re_eval_model_scws(path, name=''):
 
 
 if __name__ == '__main__':
-    words = ['fatness', 'bank', 'a', 'money', 'dog', 'Stanford', 'Washington', 'window', 'computer']
-    gd = find_nn_using_w2v(words=words)
-    display(gd)
-    a = fnn_model(r'..\model\model\Save514COS\513.noun.80d.cos.train_w2vsim_cos_imb.lr=1.0.dim=80.negs=50.burnin=20.batch=50',
-              words=words)
-    b = fnn_model(r'..\model\model\Save514RECI\513.noun.80d.cos.train_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=40.batch=50',
-              words=words,
-              name='REC')
+    re_eval_model_scws(r'..\model\model\Save514RECI\513.noun.80d.cos.train_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=40.batch=50',
+                       name='lala')
+    # words = ['fatness', 'bank', 'a', 'money', 'dog', 'Stanford', 'Washington', 'window', 'computer']
+    # gd = find_nn_using_w2v(words=words)
+    # display(gd)
+    # a = fnn_model(r'..\model\model\Save514COS\513.noun.80d.cos.train_w2vsim_cos_imb.lr=1.0.dim=80.negs=50.burnin=20.batch=50',
+    #           words=words)
+    # b = fnn_model(r'..\model\model\Save514RECI\513.noun.80d.cos.train_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=40.batch=50',
+    #           words=words,
+    #           name='REC')
+
     # re_rank_model(r"C:\Users\Administrator\Documents\G\model\data\PURE10d")
     # re_eval_model_scws(r"C:\Users\Administrator\Documents\G\model\data\PURE10d")
     # re_rank_model(r'C:\Users\Administrator\Documents\G\model\data\80D512\80D_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=20.batch=50')

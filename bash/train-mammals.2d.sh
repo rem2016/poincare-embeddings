@@ -25,4 +25,4 @@ python3 embed.py \
        -dset wordnet/mammal_closure.tsv \
        -fout model/mammals.normal.2d \
        -batchsize 10 \
-       -eval_each 10 \
+       -eval_each 1 \
