@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from sematch.semantic.similarity import WordNetSimilarity, YagoTypeSimilarity
 from word_vec_loader import WordVectorLoader
 import spacy
 from sematch.evaluation import WordSimDataset
@@ -20,7 +21,6 @@ import re
 import pickle
 from collections import defaultdict
 import pandas as pd
-
 
 word_sim_data = WordSimDataset()
 refer_pairs, refer_human_ground_truth = word_sim_data.load_dataset('noun_rg')
@@ -283,11 +283,11 @@ def re_eval_sim(model_info):
                                  index2word,
                                  use_word=True,
                                  method='cos')
-    ans['Word Rec']=eval_human(model_,
-                               objs,
-                               index2word,
-                               use_word=True,
-                               method='reciprocal')
+    ans['Word Rec'] = eval_human(model_,
+                                 objs,
+                                 index2word,
+                                 use_word=True,
+                                 method='reciprocal')
     return ans
 
 
@@ -322,7 +322,7 @@ def eval_on_scws(model_info):
 
     def _cos_sim(v1, v2):
         def norm(v):
-            return th.sqrt(th.sum(v**2, -1))
+            return th.sqrt(th.sum(v ** 2, -1))
 
         _norm = (norm(v1) * norm(v2))
         if _norm < 1e-10:
@@ -528,7 +528,7 @@ def find_node_nn(_emb, emb, index2word, objs):
 def find_node_nn_cos(_emb, emb, index2word, objs):
     def _cos_sim(v1, v2):
         def norm(v):
-            return th.sqrt(th.sum(v**2, -1))
+            return th.sqrt(th.sum(v ** 2, -1))
 
         _norm = (norm(v1) * norm(v2))
         ret = th.sum(v1 * v2, dim=-1) / _norm
@@ -548,7 +548,7 @@ def find_node_nn_cos(_emb, emb, index2word, objs):
 
 def find_nearest_neighbor(model_info, words):
     def norm(v):
-        return th.sqrt(th.sum(v**2, -1))
+        return th.sqrt(th.sum(v ** 2, -1))
 
     model_, objs, index2word, emb = model_info.load_model()
     if index2word is None:
@@ -584,7 +584,7 @@ def find_nearest_neighbor(model_info, words):
 def find_nn_using_w2v(words):
     def _cos_sim(v1, v2):
         def norm(v):
-            return np.sqrt(np.sum(v**2, -1))
+            return np.sqrt(np.sum(v ** 2, -1))
 
         _norm = (norm(v1) * norm(v2))
         ret = np.sum(v1 * v2, axis=1) / _norm
@@ -673,9 +673,63 @@ def re_eval_model_scws(path, name=''):
     print('======================================\n\n\n')
 
 
+def count_words_in_second_setup():
+    idx, objects, dwords = slurp('./wordnet/noun_closure.tsv',
+                                 load_word=True,  # Test test set should be the same
+                                 build_word_vector=False,
+                                 objects=None)
+    ans = defaultdict(lambda: [0, 0])
+    for name, (pairs, humans) in zip(datasets, ground_truth_pairs):
+        pairs = list(pairs)
+        ans[name][0] = len(pairs)
+        for a, b in pairs:
+            if a in dwords and b in dwords:
+                ans[name][1] += 1
+    return dict(ans)
+
+
+def get_old_methods():
+    wns = WordNetSimilarity()
+    path = lambda x, y: wns.word_similarity(x, y, 'path')
+    lch = lambda x, y: wns.word_similarity(x, y, 'lch')
+    wup = lambda x, y: wns.word_similarity(x, y, 'wup')
+    li = lambda x, y: wns.word_similarity(x, y, 'li')
+    res = lambda x, y: wns.word_similarity(x, y, 'res')
+    lin = lambda x, y: wns.word_similarity(x, y, 'lin')
+    jcn = lambda x, y: wns.word_similarity(x, y, 'jcn')
+    wpath = lambda x, y: wns.word_similarity(x, y, 'wpath')
+    methods = {'path': path, 'lch': lch, 'wup': wup, 'li': li, 'res': res,
+               'lin': lin, 'jcn': jcn, 'zhu': wpath}
+    return methods
+
+
+def _eval_old_methods(pairs, humans, methods):
+    ans = {}
+    for name, method in methods.items():
+        sim = [method(a, b) for a, b in pairs]
+        ans[name] = np.corrcoef(sim, humans)[0, 1]
+    return ans
+
+
+def re_eval_old_methods():
+    idx, objects, dwords = slurp('./wordnet/noun_closure.tsv',
+                                 load_word=True,  # Test test set should be the same
+                                 build_word_vector=False,
+                                 objects=None)
+    methods = get_old_methods()
+    ans = defaultdict(lambda: {})
+    for name, (pairs, humans) in zip(datasets, ground_truth_pairs):
+        _ground_truth = [(a, b, h) for (a, b), h in zip(pairs, humans) if a in dwords and b in dwords]
+        pairs = [(a, b) for a, b, h in _ground_truth]
+        humans = [h for a, b, h in _ground_truth]
+        ans[name] = _eval_old_methods(pairs, humans, methods)
+    return dict(ans)
+
+
 if __name__ == '__main__':
-    re_eval_model_scws(r'..\model\model\Save514RECI\513.noun.80d.cos.train_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=40.batch=50',
-                       name='lala')
+    display(re_eval_old_methods())
+    # re_eval_model_scws(r'..\model\model\Save514RECI\513.noun.80d.cos.train_w2vsim_imb.lr=1.0.dim=80.negs=50.burnin=40.batch=50',
+    #                    name='lala')
     # words = ['fatness', 'bank', 'a', 'money', 'dog', 'Stanford', 'Washington', 'window', 'computer']
     # gd = find_nn_using_w2v(words=words)
     # display(gd)
@@ -704,7 +758,6 @@ if __name__ == '__main__':
     # re_eval_model_scws(r'C:\Users\Administrator\Documents\G\model\data\LatestSm'
     #                   r'\nouns.50d.train.lr=1.0.dim=50.negs=50.burnin=20.batch=50',
     #                   'Naive 50d')
-
 
 r"""
 
